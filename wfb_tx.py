@@ -9,6 +9,7 @@ from wfb_common import (
     WfbTx,
     UdpTestSender,
     MavlinkSerialToUdp,
+    PiCamVideoToUdp,
 )
 
 runner = ProcessRunner()
@@ -47,7 +48,7 @@ try:
     # Start all test packet generators
     testTx    = UdpTestSender(name="TEST", port=testSender.udp_port, interval_sec=0.02,)
     mavlinkTx = MavlinkSerialToUdp(name="MAVLINK", serial_device="/dev/serial0", baudrate=115200, udp_port=mavlinkSender.udp_port,)
-    videoTx   = UdpTestSender(name="VIDEO", port=videoSender.udp_port, interval_sec=0.03,)
+    videoTx = PiCamVideoToUdp(name="VIDEO", udp_port=videoSender.udp_port, width=640, height=480, framerate=8, bitrate=700000, mtu=1200,)
 
     # Keep main thread alive
     while True:
