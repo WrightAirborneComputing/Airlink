@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import threading
 import socket
 import subprocess
 import signal
@@ -202,64 +203,206 @@ class WfbRx:
 
 
 class UdpTestSender:
-    def __init__(self, port: int, interval_sec: float = 0.1):
+    def __init__(
+        self,
+        name: str,
+        port: int,
+        interval_sec: float = 0.1,
+        auto_start: bool = True,
+    ):
+        self.name = name
         self.port = port
         self.interval_sec = interval_sec
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-    def run_forever(self):
+        self.sock = socket.socket(
+            socket.AF_INET,
+            socket.SOCK_DGRAM
+        )
+
+        self.running = False
+        self.thread = None
+
+        if auto_start:
+            self.start()
+
+    def start(self):
+        if self.thread is not None:
+            return
+
+        self.running = True
+
+        self.thread = threading.Thread(
+            target=self._run,
+            daemon=True,
+        )
+
+        self.thread.start()
+
+    def stop(self):
+        self.running = False
+
+    def join(self, timeout=None):
+        if self.thread is not None:
+            self.thread.join(timeout)
+
+    def _run(self):
         i = 0
-        while True:
-            msg = f"{time.time():.6f} TEST PACKET {i:06d}\r\n"
-            self.sock.sendto(msg.encode("ascii"), ("127.0.0.1", self.port))
-            print("\rsent:", msg.strip(), flush=True)
+
+        print(
+            f"\r"
+            f"[{self.name}] "
+            f"Sending to UDP {self.port}"
+        )
+
+        while self.running:
+            msg = (
+                f"{time.time():.6f} "
+                f"{self.name} "
+                f"PACKET "
+                f"{i:06d}\r\n"
+            )
+
+            self.sock.sendto(
+                msg.encode("ascii"),
+                ("127.0.0.1", self.port)
+            )
+
             i += 1
+
             time.sleep(self.interval_sec)
 
 
 class UdpTestReceiver:
-    def __init__(self, port: int, timeout_sec: float = 0.250):
+    def __init__(
+        self,
+        name: str,
+        port: int,
+        timeout_sec: float = 0.250,
+        auto_start: bool = True,
+    ):
+        self.name = name
         self.port = port
         self.timeout_sec = timeout_sec
+
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 65536)
+
+        self.sock.setsockopt(
+            socket.SOL_SOCKET,
+            socket.SO_RCVBUF,
+            65536
+        )
+
         self.sock.bind(("127.0.0.1", port))
         self.sock.settimeout(timeout_sec)
 
-    def run_forever(self):
-        print(f"Listening on UDP 127.0.0.1:{self.port}")
+        self.running = False
+        self.thread = None
+
+        if auto_start:
+            self.start()
+
+    def start(self):
+        if self.thread is not None:
+            return
+
+        self.running = True
+
+        self.thread = threading.Thread(
+            target=self._run,
+            daemon=True,
+        )
+
+        self.thread.start()
+
+    def stop(self):
+        self.running = False
+
+    def join(self, timeout=None):
+        if self.thread is not None:
+            self.thread.join(timeout)
+
+    def _run(self):
+        print(f"[{self.name}] Listening on UDP 127.0.0.1:{self.port}")
+
         last_packet_time = time.time()
         warning_active = False
 
-        while True:
+        while self.running:
             try:
                 data, _ = self.sock.recvfrom(4096)
+
                 now = time.time()
-                interval_ms = (now - last_packet_time) * 1000.0
+
+                interval_ms = (
+                    now - last_packet_time
+                ) * 1000.0
+
                 last_packet_time = now
 
-                text = data.decode("ascii", errors="replace").strip()
+                text = data.decode(
+                    "ascii",
+                    errors="replace"
+                ).strip()
 
                 latency_ms = None
+
                 try:
                     tx_time = float(text.split()[0])
-                    latency_ms = (now - tx_time) * 1000.0
+
+                    latency_ms = (
+                        now - tx_time
+                    ) * 1000.0
+
                 except Exception:
                     pass
 
                 if warning_active:
-                    print(f"Packets resumed after {interval_ms:.1f} ms", flush=True)
+                    print(
+                        f"[{self.name}] "
+                        f"Packets resumed after "
+                        f"{interval_ms:.1f} ms",
+                        flush=True
+                    )
+
                     warning_active = False
 
                 if latency_ms is None:
-                    print(f"\rInterval: {interval_ms:.1f} ms  {text}", flush=True)
+                    print(
+                        f"\r"
+                        f"[{self.name}] "
+                        f"Interval: {interval_ms:.1f} ms  "
+                        f"{text}",
+                        flush=True
+                    )
+
                 else:
-                    print(f"\rInterval: {interval_ms:.1f} ms  Latency: {latency_ms:.1f} ms  {text}", flush=True)
+                    print(
+                        f"\r"
+                        f"[{self.name}] "
+                        f"Interval: {interval_ms:.1f} ms  "
+                        f"Latency: {latency_ms:.1f} ms  "
+                        f"{text}",
+                        flush=True
+                    )
 
             except socket.timeout:
                 now = time.time()
-                delay_ms = (now - last_packet_time) * 1000.0
-                if delay_ms >= self.timeout_sec * 1000.0 and not warning_active:
-                    print(f"WARNING: No packet received for {delay_ms:.1f} ms", flush=True)
-                    warning_active = True
 
+                delay_ms = (
+                    now - last_packet_time
+                ) * 1000.0
+
+                if (
+                    delay_ms >=
+                    self.timeout_sec * 1000.0
+                    and not warning_active
+                ):
+                    print(
+                        f"\r"
+                        f"[{self.name}] WARNING: "
+                        f"No packet received for "
+                        f"{delay_ms:.1f} ms",
+                        flush=True
+                    )
+
+                    warning_active = True

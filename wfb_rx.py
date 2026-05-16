@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+import time
+
 from wfb_common import (
     WfbConfig,
     WifiRadioSetup,
@@ -8,7 +10,9 @@ from wfb_common import (
     UdpTestReceiver,
 )
 
-config = WfbConfig(
+runner = ProcessRunner()
+
+testReceiver = WfbConfig(
     iface="wlan1",
     channel="1",
     rx_key="/etc/wfb/gs.key",
@@ -16,23 +20,41 @@ config = WfbConfig(
     radio_port="0",
 )
 
-runner = ProcessRunner()
+mavlinkReceiver = WfbConfig(
+    iface="wlan1",
+    channel="1",
+    rx_key="/etc/wfb/gs.key",
+    udp_port=9001,
+    radio_port="1",
+)
+
+videoReceiver = WfbConfig(
+    iface="wlan1",
+    channel="1",
+    rx_key="/etc/wfb/gs.key",
+    udp_port=9002,
+    radio_port="2",
+)
 
 try:
-    # Ensure interface is configured every run
-    WifiRadioSetup(config).run()
+    WifiRadioSetup(testReceiver).run()
 
-    # Start WFB RX
-    WfbRx(config, runner).start(suppress_output=True)
+    WfbRx(testReceiver, runner).start(suppress_output=True)
+    WfbRx(mavlinkReceiver, runner).start(suppress_output=True)
+    WfbRx(videoReceiver, runner).start(suppress_output=True)
 
-    # Start packet receiver
-    UdpTestReceiver(
-        port=config.udp_port,
-        timeout_sec=0.250
-    ).run_forever()
+    testRx    = UdpTestReceiver(name="TEST", port=9000,)
+    mavlinkRx = UdpTestReceiver(name="MAVLINK", port=9001,)
+    videoRx   = UdpTestReceiver(name="VIDEO", port=9002,)
+
+    while True:
+        time.sleep(1)
 
 except KeyboardInterrupt:
     print("stopping")
 
 finally:
+    testRx.stop()
+    mavlinkRx.stop()
+    videoRx.stop()
     runner.stop_all()
