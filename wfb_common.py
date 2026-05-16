@@ -57,13 +57,13 @@ class WifiRadioSetup:
         )
 
         if already_ok:
-            print(f"{iface} already configured correctly.")
-            print(f"  type       : {current_type}")
-            print(f"  channel    : {current_channel}")
-            print(f"  power_save : {power_save}")
+            print(f"\r{iface} already configured correctly.")
+            print(f"\r  type       : {current_type}")
+            print(f"\r  channel    : {current_channel}")
+            print(f"\r  power_save : {power_save}")
             return
 
-        print(f"{iface} requires setup.")
+        print(f"\r{iface} requires setup.")
 
         self._run(
             ["sudo", "pkill", "-f", f"wpa_supplicant.*{iface}"],
@@ -406,3 +406,91 @@ class UdpTestReceiver:
                     )
 
                     warning_active = True
+
+
+class MavlinkSerialToUdp:
+
+    def __init__(
+        self,
+        name: str,
+        serial_device: str,
+        baudrate: int,
+        udp_port: int,
+        auto_start: bool = True,
+    ):
+        from pymavlink import mavutil
+
+        self.name = name
+        self.serial_device = serial_device
+        self.baudrate = baudrate
+        self.udp_port = udp_port
+        self.mavutil = mavutil
+
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.running = False
+        self.thread = None
+        self.master = None
+
+        if auto_start:
+            self.start()
+
+    def start(self):
+        if self.thread is not None:
+            return
+
+        self.running = True
+
+        self.thread = threading.Thread(
+            target=self._run,
+            daemon=True,
+        )
+
+        self.thread.start()
+
+    def stop(self):
+        self.running = False
+
+        if self.master is not None:
+            try:
+                self.master.close()
+            except Exception:
+                pass
+
+    def join(self, timeout=None):
+        if self.thread is not None:
+            self.thread.join(timeout)
+
+    def _run(self):
+        print(
+            f"\r"
+            f"[{self.name}] Serial MAVLink "
+            f"{self.serial_device}@{self.baudrate} "
+            f"-> UDP 127.0.0.1:{self.udp_port}",
+            flush=True
+        )
+
+        print("\r Connecting mavlink")
+        self.master = self.mavutil.mavlink_connection(
+            self.serial_device,
+            baud=self.baudrate,
+        )
+        # Wait for the heartbeat msg to find the system ID
+        print("\rWaiting for heartbeat")
+        self.master.wait_heartbeat()
+        print("\nHeartbeat System=" + str(self.master.target_system) + " Component=" + str(self.master.target_component) )
+        print("\r Connected mavlink")
+
+        while self.running:
+            msg = self.master.recv_msg()
+
+            if msg is None:
+                time.sleep(0.001)
+                continue
+
+            packet = msg.get_msgbuf()
+
+            if packet:
+                self.sock.sendto(
+                    packet,
+                    ("127.0.0.1", self.udp_port)
+                )

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/pi/mavenv/bin/python
 
 import time
 

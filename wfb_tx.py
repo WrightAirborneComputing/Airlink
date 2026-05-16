@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/pi/mavenv/bin/python
 
 import time
 
@@ -8,6 +8,7 @@ from wfb_common import (
     ProcessRunner,
     WfbTx,
     UdpTestSender,
+    MavlinkSerialToUdp,
 )
 
 runner = ProcessRunner()
@@ -44,9 +45,9 @@ try:
     WfbTx(videoSender,   runner).start(suppress_output=True)
 
     # Start all test packet generators
-    testTx    = UdpTestSender(name="TEST", port=testSender.udp_port, interval_sec=0.01,)
-    mavlinkTx = UdpTestSender(name="MAVLINK", port=mavlinkSender.udp_port, interval_sec=0.01,)
-    videoTx = UdpTestSender(name="VIDEO", port=videoSender.udp_port, interval_sec=0.01,)
+    testTx    = UdpTestSender(name="TEST", port=testSender.udp_port, interval_sec=0.02,)
+    mavlinkTx = MavlinkSerialToUdp(name="MAVLINK", serial_device="/dev/serial0", baudrate=115200, udp_port=mavlinkSender.udp_port,)
+    videoTx   = UdpTestSender(name="VIDEO", port=videoSender.udp_port, interval_sec=0.03,)
 
     # Keep main thread alive
     while True:
