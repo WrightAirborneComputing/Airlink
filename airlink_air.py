@@ -14,7 +14,7 @@
 
 import time
 
-from wfb_common import (
+from wfb_lib import (
     WfbConfig,
     WifiRadioSetup,
     ProcessRunner,
