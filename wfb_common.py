@@ -4,6 +4,7 @@ import socket
 import subprocess
 import signal
 import time
+from pymavlink import mavutil
 from dataclasses import dataclass
 
 
@@ -171,6 +172,7 @@ class WifiRadioSetup:
             pass
 
         return None
+# class
 
 class WfbTx:
     def __init__(self, config: WfbConfig, runner: ProcessRunner):
@@ -185,6 +187,7 @@ class WfbTx:
             "-p", self.config.radio_port,
             self.config.iface
         ], suppress_output=suppress_output)
+# class
 
 
 class WfbRx:
@@ -200,6 +203,7 @@ class WfbRx:
             "-p", self.config.radio_port,
             self.config.iface
         ], suppress_output=suppress_output)
+# class
 
 
 class UdpTestSender:
@@ -270,6 +274,7 @@ class UdpTestSender:
             i += 1
 
             time.sleep(self.interval_sec)
+# class
 
 
 class UdpTestReceiver:
@@ -358,6 +363,7 @@ class UdpTestReceiver:
 
                 if warning_active:
                     print(
+                        f"\r"
                         f"[{self.name}] "
                         f"Packets resumed after "
                         f"{interval_ms:.1f} ms",
@@ -366,24 +372,25 @@ class UdpTestReceiver:
 
                     warning_active = False
 
-                if latency_ms is None:
-                    print(
-                        f"\r"
-                        f"[{self.name}] "
-                        f"Interval: {interval_ms:.1f} ms  "
-                        f"Len: {len(text)}",
-                        flush=True
-                    )
+                if(False):
+                    if latency_ms is None:
+                        print(
+                            f"\r"
+                            f"[{self.name}] "
+                            f"Interval: {interval_ms:.1f} ms  "
+                            f"Len: {len(text)}",
+                            flush=True
+                        )
 
-                else:
-                    print(
-                        f"\r"
-                        f"[{self.name}] "
-                        f"Interval: {interval_ms:.1f} ms  "
-                        f"Latency: {latency_ms:.1f} ms  "
-                        f"Len: {len(text)}",
-                        flush=True
-                    )
+                    else:
+                        print(
+                            f"\r"
+                            f"[{self.name}] "
+                            f"Interval: {interval_ms:.1f} ms  "
+                            f"Latency: {latency_ms:.1f} ms  "
+                            f"Len: {len(text)}",
+                            flush=True
+                        )
 
             except socket.timeout:
                 now = time.time()
@@ -406,6 +413,111 @@ class UdpTestReceiver:
                     )
 
                     warning_active = True
+# class
+
+
+class QgcMavlinkGateway:
+    def __init__(
+        self,
+        name: str,
+        downlink_in_port: int,
+        qgc_register_port: int,
+        qgc_out_port: int,
+        uplink_out_port: int,
+        auto_start: bool = True,
+    ):
+        self.name = name
+        self.client_addr = None
+        self.running = False
+        self.thread = None
+
+        self.down_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.down_sock.bind(("127.0.0.1", downlink_in_port))
+        self.down_sock.settimeout(0.02)
+
+        self.qgc_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.qgc_sock.bind(("0.0.0.0", qgc_register_port))
+        self.qgc_sock.settimeout(0.02)
+
+        self.to_qgc_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.to_air_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+        self.qgc_out_port = qgc_out_port
+        self.uplink_out_port = uplink_out_port
+
+        self.qgc_mav = mavutil.mavlink.MAVLink(None)
+
+        if auto_start:
+            self.start()
+
+    def start(self):
+        if self.thread is not None:
+            return
+        self.running = True
+        self.thread = threading.Thread(target=self._run, daemon=True)
+        self.thread.start()
+
+    def _run(self):
+        print(f"\r[{self.name}] QGC gateway running", flush=True)
+
+        while self.running:
+            # QGC -> GS
+            # Used both for client registration and MAVLink uplink.
+            try:
+                data, addr = self.qgc_sock.recvfrom(4096)
+
+                # Learn where to send downlink MAVLink back to.
+                self.client_addr = (addr[0], self.qgc_out_port)
+
+                # Registration packet only. Do NOT forward to flight controller.
+                if data == b"HELLO_QGC":
+                    print(
+                        f"\r[{self.name}] Client registered: {self.client_addr}",
+                        flush=True
+                    )
+                else:
+
+                    if(False):
+                        msg_type = "UNKNOWN"
+
+                        for b in data:
+                            m = self.qgc_mav.parse_char(bytes([b]))
+                            if m is not None:
+                                msg_type = m.get_type()
+                                break
+
+                        print(
+                            f"\r"
+                            f"[{self.name}] QGC uplink {len(data)} bytes "
+                            f"from {addr}: {msg_type}",
+                            flush=True
+                        )
+                    # if
+
+                    # Real MAVLink uplink packet: forward toward air side.
+                    self.to_air_sock.sendto(
+                        data,
+                        ("127.0.0.1", self.uplink_out_port)
+                    )
+
+            except socket.timeout:
+                pass
+
+            # Air -> GS -> QGC
+            try:
+                data, _ = self.down_sock.recvfrom(4096)
+
+                if self.client_addr is not None:
+                    # print("\rMavlink [" + str(len(data)) + "]")
+                    self.qgc_sock.sendto(data, self.client_addr)
+
+            except socket.timeout:
+                pass
+    
+    def stop(self):
+        self.running = False
+
+# class
 
 
 class MavlinkSerialToUdp:
@@ -485,10 +597,65 @@ class MavlinkSerialToUdp:
             packet = msg.get_msgbuf()
 
             if packet:
+                msg_type = msg.get_type()
+                if True or msg_type == "PARAM_VALUE":
+                    print("\rMavlink[" + (msg_type) + "]",flush=True)
                 self.sock.sendto(
                     packet,
                     ("127.0.0.1", self.udp_port)
                 )
+# class
+            
+            
+class UdpToSerial:
+    def __init__(
+        self,
+        name: str,
+        udp_port: int,
+        serial_device: str,
+        baudrate: int,
+        auto_start: bool = True,
+    ):
+        import serial
+
+        self.name = name
+        self.udp_port = udp_port
+        self.serial_device = serial_device
+        self.baudrate = baudrate
+
+        self.ser = serial.Serial(serial_device, baudrate, timeout=0)
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.sock.bind(("127.0.0.1", udp_port))
+        self.sock.settimeout(0.02)
+
+        self.running = False
+        self.thread = None
+
+        if auto_start:
+            self.start()
+
+    def start(self):
+        if self.thread is not None:
+            return
+        self.running = True
+        self.thread = threading.Thread(target=self._run, daemon=True)
+        self.thread.start()
+
+    def stop(self):
+        self.running = False
+        self.ser.close()
+
+    def _run(self):
+        print(f"\r[{self.name}] UDP {self.udp_port} -> {self.serial_device}", flush=True)
+
+        while self.running:
+            try:
+                data, _ = self.sock.recvfrom(4096)
+                self.ser.write(data)
+            except socket.timeout:
+                pass
+# class
+
 
 class PiCamVideoToUdp:
     def __init__(
@@ -519,7 +686,7 @@ class PiCamVideoToUdp:
             return
 
         print(
-            f"[{self.name}] PiCam H264 RTP -> UDP 127.0.0.1:{self.udp_port}",
+            f"\r[{self.name}] PiCam H264 RTP -> UDP 127.0.0.1:{self.udp_port}",
             flush=True
         )
 
@@ -551,6 +718,7 @@ class PiCamVideoToUdp:
                 self.proc.wait(timeout=3)
             except subprocess.TimeoutExpired:
                 self.proc.kill()
+# class
 
 
 class UdpRtpH264VideoDisplay:
@@ -576,7 +744,7 @@ class UdpRtpH264VideoDisplay:
             return
 
         print(
-            f"[{self.name}] Displaying RTP/H264 from UDP 127.0.0.1:{self.port}",
+            f"\r[{self.name}] Displaying RTP/H264 from UDP 127.0.0.1:{self.port}",
             flush=True
         )
 
@@ -606,3 +774,69 @@ class UdpRtpH264VideoDisplay:
                 self.proc.wait(timeout=3)
             except subprocess.TimeoutExpired:
                 self.proc.kill()
+# class
+
+
+class UdpClientLearningRebroadcaster:
+    def __init__(
+        self,
+        name: str,
+        in_port: int,
+        register_port: int,
+        out_port: int = 14550,
+        auto_start: bool = True,
+    ):
+        self.name = name
+        self.in_port = in_port
+        self.register_port = register_port
+        self.out_port = out_port
+
+        self.client_addr = None
+        self.running = False
+        self.thread = None
+
+        self.in_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.in_sock.bind(("127.0.0.1", in_port))
+        self.in_sock.settimeout(0.02)
+
+        self.register_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.register_sock.bind(("0.0.0.0", register_port))
+        self.register_sock.settimeout(0.02)
+
+        self.out_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+        if auto_start:
+            self.start()
+
+    def start(self):
+        if self.thread is not None:
+            return
+        self.running = True
+        self.thread = threading.Thread(target=self._run, daemon=True)
+        self.thread.start()
+
+    def stop(self):
+        self.running = False
+
+    def _run(self):
+        print(
+            f"[{self.name}] Waiting for client on UDP {self.register_port}; "
+            f"forwarding local {self.in_port} -> client:{self.out_port}",
+            flush=True,
+        )
+
+        while self.running:
+            try:
+                _, addr = self.register_sock.recvfrom(1024)
+                self.client_addr = (addr[0], self.out_port)
+                print(f"[{self.name}] Client registered: {self.client_addr}", flush=True)
+            except socket.timeout:
+                pass
+
+            try:
+                data, _ = self.in_sock.recvfrom(4096)
+                if self.client_addr is not None:
+                    self.out_sock.sendto(data, self.client_addr)
+            except socket.timeout:
+                pass
+# class
