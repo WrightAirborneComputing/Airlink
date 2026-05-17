@@ -22,6 +22,7 @@ from wfb_common import (
     UdpTestReceiver,
     UdpRtpH264VideoDisplay,
     QgcMavlinkGateway,
+    DynamicUdpForwarder
 )
 
 runner = ProcessRunner()
@@ -78,7 +79,11 @@ try:
     mavlinkGateway = QgcMavlinkGateway(name="MAVLINK", downlink_in_port=mavlinkReceiver.udp_port, qgc_register_port=14555, qgc_out_port=14550, uplink_out_port=mavlinkSender.udp_port,)
 
     # Video display
-    videoRx = UdpRtpH264VideoDisplay(name="VIDEO", port=videoReceiver.udp_port, width=320, height=180,)
+    if(False):
+        videoRx = UdpRtpH264VideoDisplay(name="VIDEO", port=videoReceiver.udp_port, width=320, height=180,)
+    else:
+        videoRx = DynamicUdpForwarder(name="VIDEO", in_port=videoReceiver.udp_port, get_out_host=mavlinkGateway.get_client_ip,out_port=5600,)
+    # if
 
     while True:
         time.sleep(1)

@@ -450,6 +450,11 @@ class QgcMavlinkGateway:
         if auto_start:
             self.start()
 
+    def get_client_ip(self):
+        if self.client_addr is None:
+            return None
+        return self.client_addr[0]
+
     def start(self):
         if self.thread is not None:
             return
@@ -607,6 +612,54 @@ class MavlinkSerialToUdp:
 # class
             
             
+class DynamicUdpForwarder:
+    def __init__(self, name, in_port, get_out_host, out_port, auto_start=True):
+        self.name = name
+        self.in_port = in_port
+        self.get_out_host = get_out_host
+        self.out_port = out_port
+        self.running = False
+        self.thread = None
+
+        self.in_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.in_sock.bind(("127.0.0.1", in_port))
+        self.in_sock.settimeout(0.02)
+
+        self.out_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+        if auto_start:
+            self.start()
+
+    def start(self):
+        if self.thread is not None:
+            return
+        self.running = True
+        self.thread = threading.Thread(target=self._run, daemon=True)
+        self.thread.start()
+
+    def stop(self):
+        self.running = False
+
+    def _run(self):
+        print(
+            f"[{self.name}] Dynamic UDP forwarding "
+            f"127.0.0.1:{self.in_port} -> client:{self.out_port}",
+            flush=True,
+        )
+
+        while self.running:
+            try:
+                data, _ = self.in_sock.recvfrom(65535)
+
+                out_host = self.get_out_host()
+                if out_host is not None:
+                    self.out_sock.sendto(data, (out_host, self.out_port))
+
+            except socket.timeout:
+                pass
+# class
+
+
 class UdpToSerial:
     def __init__(
         self,
