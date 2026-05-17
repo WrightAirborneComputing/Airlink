@@ -372,7 +372,7 @@ class UdpTestReceiver:
 
                     warning_active = False
 
-                if(False):
+                if(True):
                     if latency_ms is None:
                         print(
                             f"\r"
