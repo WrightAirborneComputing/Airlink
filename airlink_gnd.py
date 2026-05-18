@@ -99,9 +99,7 @@ try:
 
     # RC
     rcTxer = RcPacketSender(name="RC-UP", port=rcTxerConfig.udp_port, interval_sec=0.05,)
-
     rcRxer = RcAckReceiver(name="RC-ACK", port=rcRxerConfig.udp_port,)
-
     rcTxer.set_channels(1200, 1400, 1600, 1800, 1000, 1000, 2000, 2000,)
 
     # QGC MAVLink bridge:
