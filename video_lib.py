@@ -88,6 +88,7 @@ class UdpRtpH264VideoDisplay:
             return
 
         print(
+            f"\r"
             f"\r[{self.name}] Displaying RTP/H264 from UDP 127.0.0.1:{self.port}",
             flush=True
         )

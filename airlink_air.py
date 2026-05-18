@@ -35,6 +35,10 @@ from video_lib import (
     PiCamVideoToUdp
 )
 
+from crsf_lib import (
+    CrsfRcOutput
+)
+
 runner = ProcessRunner()
 
 testSender = WfbConfig(
@@ -116,6 +120,9 @@ try:
         bitrate=700000,
         mtu=1200,
     )
+
+    # CRSF interface
+    rcSender = CrsfRcOutput()
 
     while True:
         time.sleep(1)

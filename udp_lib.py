@@ -126,7 +126,7 @@ class UdpTestReceiver:
             self.thread.join(timeout)
 
     def _run(self):
-        print(f"[{self.name}] Listening on UDP 127.0.0.1:{self.port}")
+        print(f"\r[{self.name}] Listening on UDP 127.0.0.1:{self.port}")
 
         last_packet_time = time.time()
         warning_active = False
@@ -171,7 +171,7 @@ class UdpTestReceiver:
 
                     warning_active = False
 
-                if(True):
+                if(False):
                     if latency_ms is None:
                         print(
                             f"\r"
@@ -248,11 +248,13 @@ class QgcMavlinkGateway:
 
         if auto_start:
             self.start()
+    # def
 
     def get_client_ip(self):
         if self.client_addr is None:
             return None
         return self.client_addr[0]
+    # def
 
     def start(self):
         if self.thread is not None:
@@ -260,6 +262,7 @@ class QgcMavlinkGateway:
         self.running = True
         self.thread = threading.Thread(target=self._run, daemon=True)
         self.thread.start()
+    # def
 
     def _run(self):
         print(f"\r[{self.name}] QGC gateway running", flush=True)
@@ -317,9 +320,11 @@ class QgcMavlinkGateway:
 
             except socket.timeout:
                 pass
+    # def
     
     def stop(self):
         self.running = False
+    # def
 
 # class
 
@@ -402,7 +407,7 @@ class MavlinkSerialToUdp:
 
             if packet:
                 msg_type = msg.get_type()
-                if True or msg_type == "PARAM_VALUE":
+                if False or msg_type == "PARAM_VALUE":
                     print("\rMavlink[" + (msg_type) + "]",flush=True)
                 self.sock.sendto(
                     packet,
@@ -412,6 +417,7 @@ class MavlinkSerialToUdp:
             
             
 class DynamicUdpForwarder:
+
     def __init__(self, name, in_port, get_out_host, out_port, auto_start=True):
         self.name = name
         self.in_port = in_port
@@ -428,6 +434,7 @@ class DynamicUdpForwarder:
 
         if auto_start:
             self.start()
+    # def
 
     def start(self):
         if self.thread is not None:
@@ -435,12 +442,15 @@ class DynamicUdpForwarder:
         self.running = True
         self.thread = threading.Thread(target=self._run, daemon=True)
         self.thread.start()
+    # def
 
     def stop(self):
         self.running = False
+    # def
 
     def _run(self):
         print(
+            f"\r"
             f"[{self.name}] Dynamic UDP forwarding "
             f"127.0.0.1:{self.in_port} -> client:{self.out_port}",
             flush=True,
@@ -456,6 +466,9 @@ class DynamicUdpForwarder:
 
             except socket.timeout:
                 pass
+            # try
+    # def
+
 # class
 
 
@@ -485,6 +498,7 @@ class UdpToSerial:
 
         if auto_start:
             self.start()
+    # def
 
     def start(self):
         if self.thread is not None:
@@ -492,10 +506,12 @@ class UdpToSerial:
         self.running = True
         self.thread = threading.Thread(target=self._run, daemon=True)
         self.thread.start()
+    # def
 
     def stop(self):
         self.running = False
         self.ser.close()
+    # def
 
     def _run(self):
         print(f"\r[{self.name}] UDP {self.udp_port} -> {self.serial_device}", flush=True)
@@ -506,126 +522,7 @@ class UdpToSerial:
                 self.ser.write(data)
             except socket.timeout:
                 pass
-# class
-
-
-class PiCamVideoToUdp:
-    def __init__(
-        self,
-        name: str,
-        udp_port: int,
-        width: int = 640,
-        height: int = 480,
-        framerate: int = 8,
-        bitrate: int = 700000,
-        mtu: int = 1200,
-        auto_start: bool = True,
-    ):
-        self.name = name
-        self.udp_port = udp_port
-        self.width = width
-        self.height = height
-        self.framerate = framerate
-        self.bitrate = bitrate
-        self.mtu = mtu
-        self.proc = None
-
-        if auto_start:
-            self.start()
-
-    def start(self):
-        if self.proc is not None:
-            return
-
-        print(
-            f"\r[{self.name}] PiCam H264 RTP -> UDP 127.0.0.1:{self.udp_port}",
-            flush=True
-        )
-
-        cmd = (
-            f"rpicam-vid -t 0 --nopreview --low-latency "
-            f"--codec h264 --inline "
-            f"--width {self.width} --height {self.height} "
-            f"--framerate {self.framerate} "
-            f"--bitrate {self.bitrate} "
-            f"--output - | "
-            f"gst-launch-1.0 -q "
-            f"fdsrc ! h264parse ! "
-            f"rtph264pay config-interval=1 pt=96 mtu={self.mtu} ! "
-            f"udpsink host=127.0.0.1 port={self.udp_port}"
-        )
-
-        self.proc = subprocess.Popen(
-            cmd,
-            shell=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            executable="/bin/bash",
-        )
-
-    def stop(self):
-        if self.proc is not None and self.proc.poll() is None:
-            self.proc.terminate()
-            try:
-                self.proc.wait(timeout=3)
-            except subprocess.TimeoutExpired:
-                self.proc.kill()
-# class
-
-
-class UdpRtpH264VideoDisplay:
-    def __init__(
-        self,
-        name: str,
-        port: int,
-        width: int = 320,
-        height: int = 180,
-        auto_start: bool = True,
-    ):
-        self.name = name
-        self.port = port
-        self.width = width
-        self.height = height
-        self.proc = None
-
-        if auto_start:
-            self.start()
-
-    def start(self):
-        if self.proc is not None:
-            return
-
-        print(
-            f"\r[{self.name}] Displaying RTP/H264 from UDP 127.0.0.1:{self.port}",
-            flush=True
-        )
-
-        cmd = [
-            "gst-launch-1.0", "-v",
-            "udpsrc", f"address=127.0.0.1", f"port={self.port}",
-            "!", "application/x-rtp,media=video,encoding-name=H264,payload=96,clock-rate=90000",
-            "!", "rtph264depay",
-            "!", "h264parse",
-            "!", "avdec_h264",
-            "!", "videoscale",
-            "!", f"video/x-raw,width={self.width},height={self.height}",
-            "!", "videoconvert",
-            "!", "autovideosink", "sync=false",
-        ]
-
-        self.proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-
-    def stop(self):
-        if self.proc is not None and self.proc.poll() is None:
-            self.proc.terminate()
-            try:
-                self.proc.wait(timeout=3)
-            except subprocess.TimeoutExpired:
-                self.proc.kill()
+    # def
 # class
 
 
@@ -659,6 +556,7 @@ class UdpClientLearningRebroadcaster:
 
         if auto_start:
             self.start()
+    # def
 
     def start(self):
         if self.thread is not None:
@@ -666,12 +564,15 @@ class UdpClientLearningRebroadcaster:
         self.running = True
         self.thread = threading.Thread(target=self._run, daemon=True)
         self.thread.start()
+    # def
 
     def stop(self):
         self.running = False
+    # def
 
     def _run(self):
         print(
+            f"\r"
             f"[{self.name}] Waiting for client on UDP {self.register_port}; "
             f"forwarding local {self.in_port} -> client:{self.out_port}",
             flush=True,
@@ -691,4 +592,6 @@ class UdpClientLearningRebroadcaster:
                     self.out_sock.sendto(data, self.client_addr)
             except socket.timeout:
                 pass
+    # def
+
 # class

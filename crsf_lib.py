@@ -66,7 +66,6 @@ class PigpioSerialByteOutput:
             self.baudrate,
             data
         )
-
         wave_id = self.pi.wave_create()
 
         if wave_id < 0:
@@ -120,6 +119,11 @@ class CrsfRcOutput:
 
         if auto_start:
             self.start()
+        # if
+
+        self.set_channels_us(1000,1100,1200,1300,1000,2000,1000,2000)
+
+    # def
 
     def close(self):
         self.stop()
@@ -153,14 +157,14 @@ class CrsfRcOutput:
             )
         )
 
-    def set_channels_us(self, ch1_to_ch8):
-        if len(ch1_to_ch8) != 8:
-            raise ValueError(
-                "Expected exactly 8 channel values"
-            )
+    def set_channels_us(self,ch1,ch2,ch3,ch4,ch5,ch6,ch7,ch8):
+        values = [ch1,ch2,ch3,ch4,ch5,ch6,ch7,ch8]
 
-        for i, us in enumerate(ch1_to_ch8):
+        for i, us in enumerate(values):
+            us = max(1000, min(2000, int(us)))
             self.channels[i] = self.us_to_crsf(us)
+        # for
+    # def
 
     def set_channels_crsf(self, ch1_to_ch8):
         if len(ch1_to_ch8) != 8:
@@ -169,10 +173,9 @@ class CrsfRcOutput:
             )
 
         for i, value in enumerate(ch1_to_ch8):
-            self.channels[i] = max(
-                172,
-                min(1811, int(value))
-            )
+            self.channels[i] = max(172,min(1811, int(value)))
+        # for
+    # def
 
     def _pack_channels(self) -> bytes:
         value = 0
