@@ -20,6 +20,10 @@ from udp_lib import (
     UdpToSerial
 )
 
+from rc_lib import (
+    RcPacketReceiver
+)
+
 from video_lib import (
     PiCamVideoToUdp
 )
@@ -87,8 +91,7 @@ try:
     WfbTx(videoTxerConfig, runner).start(suppress_output=True)
 
     # RC 
-    rcRxer = UdpTestReceiver(name="RC-UP", port=rcRxerConfig.udp_port,)
-    rcTxer = UdpTestSender(name="RC-DN",port=rcTxerConfig.udp_port,interval_sec=0.1,)
+    rcRxer = RcPacketReceiver(name="RC-UP",in_port=rcRxerConfig.udp_port,ack_port=rcTxerConfig.udp_port,)
 
     # MAVLink
     mavlinkRxer = UdpToSerial(name="MAVLINK-UP",udp_port=mavlinkRxerConfig.udp_port,serial_device="/dev/serial0",baudrate=115200,)

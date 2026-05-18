@@ -31,6 +31,11 @@ from udp_lib import (
     DynamicUdpForwarder
 )
 
+from rc_lib import (
+    RcPacketSender,
+    RcAckReceiver,
+)
+
 from video_lib import (
     UdpRtpH264VideoDisplay,
 )
@@ -93,8 +98,11 @@ try:
     WfbRx(videoRxerConfig, runner).start(suppress_output=True)
 
     # RC
-    rcTxer = UdpTestSender(name="RC-DN",port=rcTxerConfig.udp_port,interval_sec=0.1,)
-    rcRxer = UdpTestReceiver(name="RC-DN", port=rcRxerConfig.udp_port,)
+    rcTxer = RcPacketSender(name="RC-UP", port=rcTxerConfig.udp_port, interval_sec=0.05,)
+
+    rcRxer = RcAckReceiver(name="RC-ACK", port=rcRxerConfig.udp_port,)
+
+    rcTxer.set_channels(1200, 1400, 1600, 1800, 1000, 1000, 2000, 2000,)
 
     # QGC MAVLink bridge:
     mavlinkGateway = QgcMavlinkGateway(name="MAVLINK", downlink_in_port=mavlinkRxerConfig.udp_port, qgc_register_port=14555, qgc_out_port=14550, uplink_out_port=mavlinkTxerConfig.udp_port,)
