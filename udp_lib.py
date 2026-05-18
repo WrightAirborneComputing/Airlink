@@ -81,7 +81,7 @@ class UdpTestReceiver:
         self,
         name: str,
         port: int,
-        timeout_sec: float = 0.250,
+        timeout_sec: float = 0.2,
         auto_start: bool = True,
     ):
         self.name = name
@@ -101,6 +101,9 @@ class UdpTestReceiver:
 
         self.running = False
         self.thread = None
+
+        self.rx_count = 0
+        self.overrun_count = 0
 
         if auto_start:
             self.start()
@@ -134,6 +137,7 @@ class UdpTestReceiver:
         while self.running:
             try:
                 data, _ = self.sock.recvfrom(4096)
+                self.rx_count += 1
 
                 now = time.time()
 
@@ -194,20 +198,16 @@ class UdpTestReceiver:
             except socket.timeout:
                 now = time.time()
 
-                delay_ms = (
-                    now - last_packet_time
-                ) * 1000.0
+                delay_ms = (now - last_packet_time) * 1000.0
 
-                if (
-                    delay_ms >=
-                    self.timeout_sec * 1000.0
-                    and not warning_active
-                ):
+                if ( (delay_ms >= self.timeout_sec * 1000.0) and (not warning_active) ):
+                    self.overrun_count += 1
                     print(
                         f"\r"
                         f"[{self.name}] WARNING: "
                         f"No packet received for "
                         f"{delay_ms:.1f} ms",
+                        f"{self.overrun_count:d}/{self.rx_count:d} overruns",
                         flush=True
                     )
 
@@ -254,6 +254,24 @@ class QgcMavlinkGateway:
         if self.client_addr is None:
             return None
         return self.client_addr[0]
+    # def
+
+    def _decode_mavlink_packet(self, data: bytes):
+        msg_types = []
+
+        print("\rDecoding [" + str(len(data)) + "]")
+        for b in data:
+            try:
+                msg = self.mav.parse_char(bytes([b]))
+
+                if msg is not None:
+                    msg_types.append(msg.get_type())
+
+            except Exception as e:
+                msg_types.append(f"DECODE_ERROR:{e}")
+                break
+
+        return msg_types
     # def
 
     def start(self):
@@ -315,7 +333,7 @@ class QgcMavlinkGateway:
                 data, _ = self.down_sock.recvfrom(4096)
 
                 if self.client_addr is not None:
-                    # print("\rMavlink [" + str(len(data)) + "]")
+                    # self._decode_mavlink_packet(data)
                     self.qgc_sock.sendto(data, self.client_addr)
 
             except socket.timeout:
@@ -407,15 +425,11 @@ class MavlinkSerialToUdp:
 
             if packet:
                 msg_type = msg.get_type()
-                if False or msg_type == "PARAM_VALUE":
-                    print("\rMavlink[" + (msg_type) + "]",flush=True)
-                self.sock.sendto(
-                    packet,
-                    ("127.0.0.1", self.udp_port)
-                )
+                #print("\rMavlink[" + (msg_type) + "]",flush=True)
+                self.sock.sendto(packet,("127.0.0.1", self.udp_port))
 # class
-            
-            
+
+
 class DynamicUdpForwarder:
 
     def __init__(self, name, in_port, get_out_host, out_port, auto_start=True):
@@ -525,73 +539,3 @@ class UdpToSerial:
     # def
 # class
 
-
-class UdpClientLearningRebroadcaster:
-    def __init__(
-        self,
-        name: str,
-        in_port: int,
-        register_port: int,
-        out_port: int = 14550,
-        auto_start: bool = True,
-    ):
-        self.name = name
-        self.in_port = in_port
-        self.register_port = register_port
-        self.out_port = out_port
-
-        self.client_addr = None
-        self.running = False
-        self.thread = None
-
-        self.in_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.in_sock.bind(("127.0.0.1", in_port))
-        self.in_sock.settimeout(0.02)
-
-        self.register_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.register_sock.bind(("0.0.0.0", register_port))
-        self.register_sock.settimeout(0.02)
-
-        self.out_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-
-        if auto_start:
-            self.start()
-    # def
-
-    def start(self):
-        if self.thread is not None:
-            return
-        self.running = True
-        self.thread = threading.Thread(target=self._run, daemon=True)
-        self.thread.start()
-    # def
-
-    def stop(self):
-        self.running = False
-    # def
-
-    def _run(self):
-        print(
-            f"\r"
-            f"[{self.name}] Waiting for client on UDP {self.register_port}; "
-            f"forwarding local {self.in_port} -> client:{self.out_port}",
-            flush=True,
-        )
-
-        while self.running:
-            try:
-                _, addr = self.register_sock.recvfrom(1024)
-                self.client_addr = (addr[0], self.out_port)
-                print(f"[{self.name}] Client registered: {self.client_addr}", flush=True)
-            except socket.timeout:
-                pass
-
-            try:
-                data, _ = self.in_sock.recvfrom(4096)
-                if self.client_addr is not None:
-                    self.out_sock.sendto(data, self.client_addr)
-            except socket.timeout:
-                pass
-    # def
-
-# class

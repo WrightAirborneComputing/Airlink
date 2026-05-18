@@ -1,17 +1,5 @@
 #!/home/pi/mavenv/bin/python
 
-# Test path:
-# Air test -> WFB p0 -> GS UDP 9000
-#
-# MAVLink downlink path:
-# Air serial -> UDP 9001 -> WFB p1 -> GS UDP 9001 -> QGC 14550
-#
-# MAVLink uplink path:
-# QGC 14555 -> GS UDP 9002 -> WFB p3 -> Air UDP 9002 -> serial
-#
-# Video path:
-# Air PiCam -> UDP 9003 -> WFB p2 -> GS UDP 9003 -> GStreamer display
-
 import time
 
 from process_lib import (
@@ -26,6 +14,7 @@ from wfb_lib import (
 )
 
 from udp_lib import (
+    UdpTestReceiver,
     UdpTestSender,
     MavlinkSerialToUdp,
     UdpToSerial
@@ -41,7 +30,7 @@ from crsf_lib import (
 
 runner = ProcessRunner()
 
-testSender = WfbConfig(
+rcRxerConfig = WfbConfig(
     iface="wlan1",
     channel="1",
     tx_key="/etc/wfb/drone.key",
@@ -49,7 +38,7 @@ testSender = WfbConfig(
     radio_port="0",
 )
 
-mavlinkSender = WfbConfig(
+rcTxerConfig = WfbConfig(
     iface="wlan1",
     channel="1",
     tx_key="/etc/wfb/drone.key",
@@ -57,7 +46,7 @@ mavlinkSender = WfbConfig(
     radio_port="1",
 )
 
-mavlinkReceiver = WfbConfig(
+mavlinkRxerConfig = WfbConfig(
     iface="wlan1",
     channel="1",
     rx_key="/etc/wfb/drone.key",
@@ -65,7 +54,7 @@ mavlinkReceiver = WfbConfig(
     radio_port="2",
 )
 
-videoSender = WfbConfig(
+mavlinkTxerConfig = WfbConfig(
     iface="wlan1",
     channel="1",
     tx_key="/etc/wfb/drone.key",
@@ -73,56 +62,43 @@ videoSender = WfbConfig(
     radio_port="3",
 )
 
-testTx = None
-mavlinkTx = None
-mavlinkRx = None
-videoTx = None
+videoTxerConfig = WfbConfig(
+    iface="wlan1",
+    channel="1",
+    tx_key="/etc/wfb/drone.key",
+    udp_port=9004,
+    radio_port="4",
+)
+
+rcRxer = None
+rcTxer = None
+mavlinkRxer = None
+mavlinkTxer = None
+videoTxer = None
 
 try:
-    WifiRadioSetup(testSender).run()
+    WifiRadioSetup(rcRxerConfig).run()
 
     # WFB transmit channels
-    WfbTx(testSender, runner).start(suppress_output=True)
-    WfbTx(mavlinkSender, runner).start(suppress_output=True)
-    WfbRx(mavlinkReceiver, runner).start(suppress_output=True)
-    WfbTx(videoSender, runner).start(suppress_output=True)
+    WfbRx(rcRxerConfig, runner).start(suppress_output=True)
+    WfbTx(rcTxerConfig, runner).start(suppress_output=True)
+    WfbRx(mavlinkRxerConfig, runner).start(suppress_output=True)
+    WfbTx(mavlinkTxerConfig, runner).start(suppress_output=True)
+    WfbTx(videoTxerConfig, runner).start(suppress_output=True)
 
-    # TEST generator
-    testTx = UdpTestSender(
-        name="TEST",
-        port=testSender.udp_port,
-        interval_sec=0.02,
-    )
+    # RC 
+    rcRxer = UdpTestReceiver(name="RC-UP", port=rcRxerConfig.udp_port,)
+    rcTxer = UdpTestSender(name="RC-DN",port=rcTxerConfig.udp_port,interval_sec=0.1,)
 
-    # MAVLink downlink: FC serial -> local UDP 9001
-    mavlinkTx = MavlinkSerialToUdp(
-        name="MAVLINK-DN",
-        serial_device="/dev/serial0",
-        baudrate=115200,
-        udp_port=mavlinkSender.udp_port,
-    )
+    # MAVLink
+    mavlinkRxer = UdpToSerial(name="MAVLINK-UP",udp_port=mavlinkRxerConfig.udp_port,serial_device="/dev/serial0",baudrate=115200,)
+    mavlinkTxer = MavlinkSerialToUdp(name="MAVLINK-DN",serial_device="/dev/serial0",baudrate=115200,udp_port=mavlinkTxerConfig.udp_port,)
 
-    # MAVLink uplink: local UDP 9002 -> FC serial
-    mavlinkRx = UdpToSerial(
-        name="MAVLINK-UP",
-        udp_port=mavlinkReceiver.udp_port,
-        serial_device="/dev/serial0",
-        baudrate=115200,
-    )
-
-    # VIDEO downlink: PiCam -> local UDP 9003
-    videoTx = PiCamVideoToUdp(
-        name="VIDEO",
-        udp_port=videoSender.udp_port,
-        width=640,
-        height=480,
-        framerate=8,
-        bitrate=700000,
-        mtu=1200,
-    )
+    # VIDEO downlink: PiCam -> local UDP 
+    videoTxer = PiCamVideoToUdp(name="VIDEO",udp_port=videoTxerConfig.udp_port,width=640,height=480,framerate=8,bitrate=700000,mtu=1200,)
 
     # CRSF interface
-    rcSender = CrsfRcOutput()
+    rcTxer = CrsfRcOutput()
 
     while True:
         time.sleep(1)
@@ -131,16 +107,19 @@ except KeyboardInterrupt:
     print("stopping")
 
 finally:
-    if testTx is not None:
-        testTx.stop()
+    if rcRxer is not None:
+        rcRxer.stop()
 
-    if mavlinkTx is not None:
-        mavlinkTx.stop()
+    if rcTxer is not None:
+        rcTxer.stop()
 
-    if mavlinkRx is not None:
-        mavlinkRx.stop()
+    if mavlinkRxer is not None:
+        mavlinkRxer.stop()
 
-    if videoTx is not None:
-        videoTx.stop()
+    if mavlinkTxer is not None:
+        mavlinkTxer.stop()
+
+    if videoTxer is not None:
+        videoTxer.stop()
 
     runner.stop_all()
