@@ -331,6 +331,7 @@ class QgcMavlinkGateway:
             # Air -> GS -> QGC
             try:
                 data, _ = self.down_sock.recvfrom(4096)
+                # print(f"\rGot [{len(data)}]",flush=True)
 
                 if self.client_addr is not None:
                     # self._decode_mavlink_packet(data)
@@ -425,7 +426,7 @@ class MavlinkSerialToUdp:
 
             if packet:
                 msg_type = msg.get_type()
-                #print("\rMavlink[" + (msg_type) + "]",flush=True)
+                # print("\rMavlink[" + (msg_type) + "] to [" + str(self.udp_port) + "]",flush=True)
                 self.sock.sendto(packet,("127.0.0.1", self.udp_port))
 # class
 

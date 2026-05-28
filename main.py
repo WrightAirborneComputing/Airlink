@@ -64,8 +64,8 @@ def read_local_state(prefix):
     raw0 = adc0.read_u16()
     raw1 = adc1.read_u16()
 
-    volts0 = raw0 * 3.3 / 65535.0
-    volts1 = raw1 * 3.3 / 65535.0
+    volts0 = raw0 * 5.0 / 65535.0
+    volts1 = raw1 * 5.0 / 65535.0
 
     #
     # GPIOs

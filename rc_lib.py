@@ -28,41 +28,14 @@ class RcPacketSender:
 
         self.frame_count = 0
 
-        self.channels = [
-            1500,
-            1500,
-            1000,
-            1500,
-            1000,
-            1000,
-            1000,
-            1000,
-        ]
+        self.channels = [1500,1500,1500,1500,
+                         1000,1000,1000,1000,1000,1000,1000,1000,]
 
         if auto_start:
             self.start()
 
-    def set_channels(
-        self,
-        ch1,
-        ch2,
-        ch3,
-        ch4,
-        ch5,
-        ch6,
-        ch7,
-        ch8,
-    ):
-        values = [
-            ch1,
-            ch2,
-            ch3,
-            ch4,
-            ch5,
-            ch6,
-            ch7,
-            ch8,
-        ]
+    def set_channels(self,ch1,ch2,ch3,ch4,ch5,ch6,ch7,ch8,ch9,ch10,ch11,ch12,):
+        values = [ch1,ch2,ch3,ch4,ch5,ch6,ch7,ch8,ch9,ch10,ch11,ch12,]
 
         self.channels = [
             max(1000, min(2000, int(v)))
@@ -132,18 +105,12 @@ class RcPacketReceiver:
         self.running = False
         self.thread = None
 
-        self.sock = socket.socket(
-            socket.AF_INET,
-            socket.SOCK_DGRAM
-        )
+        self.sock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
 
         self.sock.bind(("127.0.0.1", in_port))
         self.sock.settimeout(0.02)
 
-        self.ack_sock = socket.socket(
-            socket.AF_INET,
-            socket.SOCK_DGRAM
-        )
+        self.ack_sock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
 
         self.channels = [1500] * 8
         self.frame_count = -1
@@ -156,12 +123,7 @@ class RcPacketReceiver:
             return
 
         self.running = True
-
-        self.thread = threading.Thread(
-            target=self._run,
-            daemon=True,
-        )
-
+        self.thread = threading.Thread(target=self._run,daemon=True,)
         self.thread.start()
 
     def stop(self):
@@ -181,14 +143,10 @@ class RcPacketReceiver:
                 data, _ = self.sock.recvfrom(4096)
 
                 rx_time = time.time()
-
                 text = data.decode("ascii").strip()
-
                 fields = text.split()
-
-                if len(fields) != 10:
+                if len(fields) != 14:
                     continue
-
                 frame_count = int(fields[0])
                 tx_time = float(fields[1])
 
@@ -222,14 +180,15 @@ class RcPacketReceiver:
                     rx_time - tx_time
                 ) * 1000.0
 
-                print(
-                    f"\r"
-                    f"[{self.name}] "
-                    f"frame={frame_count} "
-                    f"latency={latency_ms:.1f} ms "
-                    f"ch={self.channels}",
-                    flush=True,
-                )
+                if(False):
+                    print(
+                        f"\r"
+                        f"[{self.name}] "
+                        f"frame={frame_count} "
+                        f"latency={latency_ms:.1f} ms "
+                        f"ch={self.channels}",
+                        flush=True,
+                    )
 
                 ack = (
                     f"{frame_count} "
@@ -333,15 +292,16 @@ class RcAckReceiver:
                     now - tx_time
                 ) * 1000.0
 
-                print(
-                    f"\r"
-                    f"[{self.name}] "
-                    f"frame={frame_count} "
-                    f"up={uplink_ms:.1f} ms "
-                    f"down={downlink_ms:.1f} ms "
-                    f"total={total_latency_ms:.1f} ms",
-                    flush=True,
-                )
+                if(False):
+                    print(
+                        f"\r"
+                        f"[{self.name}] "
+                        f"frame={frame_count} "
+                        f"up={uplink_ms:.1f} ms "
+                        f"down={downlink_ms:.1f} ms "
+                        f"total={total_latency_ms:.1f} ms",
+                        flush=True,
+                    )
 
             except socket.timeout:
                 pass

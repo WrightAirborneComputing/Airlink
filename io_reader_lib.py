@@ -52,11 +52,14 @@ class PicoJsonRcReader:
         self.ser.close()
 
     def _volts_to_us(self, volts):
-        # Assumes joystick axis is 0.0V -> 1000, 3.3V -> 2000
-        value = 1000 + (float(volts) / 3.3) * 1000
+        min_volts = 0.69
+        max_volts = 3.90
+        volt_range = max_volts - min_volts
+        ratio = (float(volts) - min_volts) / volt_range
+        value = 1000 + (ratio * 1000)
         return max(1000, min(2000, int(value)))
 
-    def _sw1_to_us(self, sw):
+    def _sw3_to_us(self, sw):
         # 3-position switch: 0/1/2 -> 1000/1500/2000
         if sw == 0:
             return 1000
@@ -66,22 +69,33 @@ class PicoJsonRcReader:
             return 2000
         return 1500
 
-    def _sw_to_us(self, sw):
+    def _sw2_to_us(self, sw):
         # single switch: 0/1 -> 1000/2000
         return 2000 if int(sw) else 1000
 
     def _packet_to_channels(self, p):
-        ch1 = self._volts_to_us(p.get("p1_a0_v", 1.65))
-        ch2 = self._volts_to_us(p.get("p1_a1_v", 1.65))
-        ch3 = self._volts_to_us(p.get("p2_a0_v", 0.0))
-        ch4 = self._volts_to_us(p.get("p2_a1_v", 1.65))
+        ch1 = self._volts_to_us(p.get("p1_a0_v", 0.0))
+        ch2 = self._volts_to_us(p.get("p1_a1_v", 0.0))
+        ch3 = self._volts_to_us(p.get("p2_a1_v", 0.0))
+        ch4 = self._volts_to_us(p.get("p2_a0_v", 0.0))
 
-        ch5 = self._sw1_to_us(p.get("p1_sw1", 1))
-        ch6 = self._sw_to_us(p.get("p1_sw2", 0))
-        ch7 = self._sw_to_us(p.get("p1_sw3", 0))
-        ch8 = self._sw1_to_us(p.get("p2_sw1", 1))
+        if(False):
+            v1 = p.get("p1_a0_v", 0.0)
+            v2 = p.get("p1_a1_v", 0.0)
+            v3 = p.get("p2_a1_v", 0.0)
+            v4 = p.get("p2_a0_v", 0.0)
+            print(f"\r ch1[{v1}] ch2[{v2}] ch3[{v3}] ch4[{v4}] " , flush=True)
 
-        return ch1, ch2, ch3, ch4, ch5, ch6, ch7, ch8
+        ch5  = self._sw2_to_us(p.get("p2_sw3", 0)) # Spare
+        ch6  = self._sw3_to_us(p.get("p1_sw1", 0)) # Flight mode
+        ch7  = self._sw3_to_us(p.get("p2_sw1", 0)) # FW/MC
+        ch8  = self._sw2_to_us(p.get("p2_sw2", 0)) # Kill
+        ch9  = self._sw2_to_us(p.get("p1_sw2", 0)) # Kill
+        ch10 = self._sw2_to_us(p.get("p1_sw3", 0)) # Spare
+        ch11 = 1000
+        ch12 = 1000
+
+        return ch1, ch2, ch3, ch4, ch5, ch6, ch7, ch8, ch9, ch10, ch11, ch12
 
     def _handle_line(self, line):
         try:
@@ -91,12 +105,13 @@ class PicoJsonRcReader:
 
             self.rc_sender.set_channels(*channels)
 
-            print(
-                "\r"
-                f"[{self.name}] RC channels: "
-                f"{channels}",
-                flush=True,
-            )
+            if(True):
+                print(
+                    "\r"
+                    f"[{self.name}] RC channels: "
+                    f"{channels}",
+                    flush=True,
+                )
 
         except Exception as e:
             print(

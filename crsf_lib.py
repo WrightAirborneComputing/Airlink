@@ -121,7 +121,7 @@ class CrsfRcOutput:
             self.start()
         # if
 
-        self.set_channels_us(1000,1100,1200,1300,1000,2000,1000,2000)
+        self.set_channels_us(1000,1200,1200,1300,1000,2000,1000,2000,1000,2000,1000,2000)
 
     # def
 
@@ -157,8 +157,8 @@ class CrsfRcOutput:
             )
         )
 
-    def set_channels_us(self,ch1,ch2,ch3,ch4,ch5,ch6,ch7,ch8):
-        values = [ch1,ch2,ch3,ch4,ch5,ch6,ch7,ch8]
+    def set_channels_us(self,ch1,ch2,ch3,ch4,ch5,ch6,ch7,ch8,ch9,ch10,ch11,ch12):
+        values = [ch1,ch2,ch3,ch4,ch5,ch6,ch7,ch8,ch9,ch10,ch11,ch12]
 
         for i, us in enumerate(values):
             us = max(1000, min(2000, int(us)))
@@ -166,13 +166,13 @@ class CrsfRcOutput:
         # for
     # def
 
-    def set_channels_crsf(self, ch1_to_ch8):
-        if len(ch1_to_ch8) != 8:
+    def set_channels_crsf(self, ch1_to_ch12):
+        if len(ch1_to_ch12) != 12:
             raise ValueError(
-                "Expected exactly 8 channel values"
+                "Expected exactly 12 channel values"
             )
 
-        for i, value in enumerate(ch1_to_ch8):
+        for i, value in enumerate(ch1_to_ch12):
             self.channels[i] = max(172,min(1811, int(value)))
         # for
     # def
