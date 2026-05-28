@@ -1,16 +1,5 @@
 #!/home/pi/mavenv/bin/python
 
-# Test path:
-# Air test -> WFB p0 -> GS UDP 9000
-#
-# Mavlink path:
-# Downlink: Air serial -> WFB p1 -> GS UDP 9001 -> QGC 14550
-# Uplink:   QGC 14555 -> GS UDP 9002 -> WFB p3 -> Air UDP 9002 -> serial
-#
-# Video path:
-# Air PiCam -> WFB p2 -> GS UDP 9003 -> GStreamer display
-#
-
 import time
 
 from process_lib import (
@@ -25,10 +14,8 @@ from wfb_lib import (
 )
 
 from udp_lib import (
-    UdpTestSender,
-    UdpTestReceiver,
     QgcMavlinkGateway,
-    DynamicUdpForwarder
+    DynamicUdpForwarder,
 )
 
 from rc_lib import (
@@ -36,9 +23,14 @@ from rc_lib import (
     RcAckReceiver,
 )
 
+from io_reader_lib import (
+    PicoJsonRcReader,
+)
+
 from video_lib import (
     UdpRtpH264VideoDisplay,
 )
+
 
 runner = ProcessRunner()
 
@@ -84,6 +76,7 @@ videoRxerConfig = WfbConfig(
 
 rcTxer = None
 rcRxer = None
+picoRcReader = None
 mavlinkGateway = None
 videoRxer = None
 
@@ -97,20 +90,50 @@ try:
     WfbRx(mavlinkRxerConfig, runner).start(suppress_output=True)
     WfbRx(videoRxerConfig, runner).start(suppress_output=True)
 
-    # RC
-    rcTxer = RcPacketSender(name="RC-UP", port=rcTxerConfig.udp_port, interval_sec=0.05,)
-    rcRxer = RcAckReceiver(name="RC-ACK", port=rcRxerConfig.udp_port,)
-    rcTxer.set_channels(1200, 1400, 1600, 1800, 1000, 1000, 2000, 2000,)
+    # RC uplink and ACK receiver
+    rcTxer = RcPacketSender(
+        name="RC-UP",
+        port=rcTxerConfig.udp_port,
+        interval_sec=0.05,
+    )
 
-    # QGC MAVLink bridge:
-    mavlinkGateway = QgcMavlinkGateway(name="MAVLINK", downlink_in_port=mavlinkRxerConfig.udp_port, qgc_register_port=14555, qgc_out_port=14550, uplink_out_port=mavlinkTxerConfig.udp_port,)
+    rcRxer = RcAckReceiver(
+        name="RC-ACK",
+        port=rcRxerConfig.udp_port,
+    )
+
+    # Pico joystick/switch JSON -> RC channels
+    picoRcReader = PicoJsonRcReader(
+        name="PICO-RC",
+        serial_device="/dev/serial0",
+        baudrate=115200,
+        rc_sender=rcTxer,
+    )
+
+    # QGC MAVLink bridge
+    mavlinkGateway = QgcMavlinkGateway(
+        name="MAVLINK",
+        downlink_in_port=mavlinkRxerConfig.udp_port,
+        qgc_register_port=14555,
+        qgc_out_port=14550,
+        uplink_out_port=mavlinkTxerConfig.udp_port,
+    )
 
     # Video display/rebro
-    if(False):
-        videoRxerConfig = UdpRtpH264VideoDisplay(name="VIDEO", port=videoRxerConfig.udp_port, width=320, height=180,)
+    if False:
+        videoRxer = UdpRtpH264VideoDisplay(
+            name="VIDEO",
+            port=videoRxerConfig.udp_port,
+            width=320,
+            height=180,
+        )
     else:
-        videoRxerConfig = DynamicUdpForwarder(name="VIDEO", in_port=videoRxerConfig.udp_port, get_out_host=mavlinkGateway.get_client_ip,out_port=5600,)
-    # if
+        videoRxer = DynamicUdpForwarder(
+            name="VIDEO",
+            in_port=videoRxerConfig.udp_port,
+            get_out_host=mavlinkGateway.get_client_ip,
+            out_port=5600,
+        )
 
     while True:
         time.sleep(1)
@@ -119,16 +142,19 @@ except KeyboardInterrupt:
     print("stopping")
 
 finally:
+    if picoRcReader is not None:
+        picoRcReader.stop()
+
     if rcTxer is not None:
         rcTxer.stop()
 
     if rcRxer is not None:
-        rcTxer.stop()
+        rcRxer.stop()
 
     if mavlinkGateway is not None:
         mavlinkGateway.stop()
 
     if videoRxer is not None:
-        videoRxerConfig.stop()
+        videoRxer.stop()
 
     runner.stop_all()
