@@ -42,14 +42,14 @@ class PicoJsonRcReader:
         with open(self.calibration_file, "r") as f:
             cal = json.load(f)
 
-        print(f"[{self.name}] Loaded calibration from {self.calibration_file}")
+        print(f"\r[{self.name}] Loaded calibration from {self.calibration_file}")
         return cal
 
     def _save_calibration(self, cal):
         with open(self.calibration_file, "w") as f:
             json.dump(cal, f, indent=4)
 
-        print(f"[{self.name}] Saved calibration to {self.calibration_file}")
+        print(f"\r[{self.name}] Saved calibration to {self.calibration_file}")
 
     def _drain_uart_for(self, seconds):
         end_time = time.time() + seconds
@@ -118,17 +118,25 @@ class PicoJsonRcReader:
     def _prompt_sample(self, prompt):
         print()
         print("\r" + prompt)
+
         print("\rSampling in ", end="", flush=True)
 
-        for _ in range(self.calibration_delay_sec):
-            print(".", end="", flush=True)
+        for remaining in range(
+            self.calibration_delay_sec,
+            0,
+            -1,
+        ):
+            print(
+                f"{remaining}...",
+                end="",
+                flush=True,
+            )
+
             self._drain_uart_for(1.0)
 
-        print()
-
+        print("\r")
         sample = self._sample_axis_values()
         print("\rCaptured:", sample)
-
         return sample
 
     def _make_axis_cal(self, low, centre, high):
@@ -138,21 +146,21 @@ class PicoJsonRcReader:
 
         if travel < MIN_TRAVEL_VOLTS:
             raise RuntimeError(
-                f"Calibration failed: stick travel too small. "
-                f"low={low:.3f}, centre={centre:.3f}, high={high:.3f}, "
-                f"travel={travel:.3f} V"
+                f"\rCalibration failed: stick travel too small. "
+                f"\rlow={low:.3f}, centre={centre:.3f}, high={high:.3f}, "
+                f"\rtravel={travel:.3f} V"
             )
 
         if centre == low:
             raise RuntimeError(
-                f"Calibration failed: centre equals low. "
-                f"low={low:.3f}, centre={centre:.3f}, high={high:.3f}"
+                f"\rCalibration failed: centre equals low. "
+                f"\rlow={low:.3f}, centre={centre:.3f}, high={high:.3f}"
             )
 
         if high == centre:
             raise RuntimeError(
-                f"Calibration failed: high equals centre. "
-                f"low={low:.3f}, centre={centre:.3f}, high={high:.3f}"
+                f"\rCalibration failed: high equals centre. "
+                f"\rlow={low:.3f}, centre={centre:.3f}, high={high:.3f}"
             )
 
         return {
