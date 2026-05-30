@@ -94,15 +94,26 @@ class PicoJsonRcReader:
             except Exception:
                 print(f"[{self.name}] Ignoring bad JSON: {line}")
 
-    def _sample_axis_values(self):
-        p = self._read_packet_blocking()
+    def _sample_axis_values(self, sample_count=10):
+        samples = []
 
-        return {
-            "roll": float(p.get("p1_a0_v", 0.0)),
-            "pitch": float(p.get("p1_a1_v", 0.0)),
-            "throttle": float(p.get("p2_a1_v", 0.0)),
-            "yaw": float(p.get("p2_a0_v", 0.0)),
+        for _ in range(sample_count):
+            samples.append(self._read_packet_blocking())
+            time.sleep(0.02)
+
+        def avg(field):
+            return sum(float(p.get(field, 0.0)) for p in samples) / len(samples)
+
+        result = {
+            "roll": avg("p1_a0_v"),
+            "pitch": avg("p1_a1_v"),
+            "throttle": avg("p2_a1_v"),
+            "yaw": avg("p2_a0_v"),
         }
+
+        print(f"\r[{self.name}] Sampled axes: {result}", flush=True)
+
+        return result
 
     def _prompt_sample(self, prompt):
         print()
@@ -121,17 +132,41 @@ class PicoJsonRcReader:
         return sample
 
     def _make_axis_cal(self, low, centre, high):
+        MIN_TRAVEL_VOLTS = 0.5
+
+        travel = abs(high - low)
+
+        if travel < MIN_TRAVEL_VOLTS:
+            raise RuntimeError(
+                f"Calibration failed: stick travel too small. "
+                f"low={low:.3f}, centre={centre:.3f}, high={high:.3f}, "
+                f"travel={travel:.3f} V"
+            )
+
+        if centre == low:
+            raise RuntimeError(
+                f"Calibration failed: centre equals low. "
+                f"low={low:.3f}, centre={centre:.3f}, high={high:.3f}"
+            )
+
+        if high == centre:
+            raise RuntimeError(
+                f"Calibration failed: high equals centre. "
+                f"low={low:.3f}, centre={centre:.3f}, high={high:.3f}"
+            )
+
         return {
             "low": low,
             "centre": centre,
             "high": high,
-            "low_scale": 500.0 / (centre - low) if centre != low else 1.0,
-            "high_scale": 500.0 / (high - centre) if high != centre else 1.0,
+            "low_scale": 500.0 / (centre - low),
+            "high_scale": 500.0 / (high - centre),
         }
 
     def _run_calibration(self):
         print()
         print("=== Stick calibration ===")
+        print("Delete calibration.json to force this routine to run again.")
 
         vertical_down = self._prompt_sample(
             "Move vertical sticks fully DOWN: throttle low, pitch down."
@@ -157,7 +192,7 @@ class PicoJsonRcReader:
             "Move horizontal sticks to CENTRE."
         )
 
-        return {
+        cal = {
             "roll": self._make_axis_cal(
                 horizontal_left["roll"],
                 horizontal_centre["roll"],
@@ -180,15 +215,29 @@ class PicoJsonRcReader:
             ),
         }
 
+        print()
+        print("Calibration complete:")
+        print(json.dumps(cal, indent=4))
+        print()
+
+        return cal
+
     def _axis_to_us(self, axis_name, value):
         c = self.calibration[axis_name]
-        value = float(value)
-        centre = float(c["centre"])
 
-        if value <= centre:
-            pwm = 1500.0 + ((value - centre) * float(c["low_scale"]))
+        value = float(value)
+
+        low = float(c["low"])
+        centre = float(c["centre"])
+        high = float(c["high"])
+
+        low_scale = float(c["low_scale"])
+        high_scale = float(c["high_scale"])
+
+        if abs(value - low) < abs(value - high):
+            pwm = 1500.0 + ((value - centre) * low_scale)
         else:
-            pwm = 1500.0 + ((value - centre) * float(c["high_scale"]))
+            pwm = 1500.0 + ((value - centre) * high_scale)
 
         return max(1000, min(2000, int(round(pwm))))
 
