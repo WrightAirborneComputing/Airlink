@@ -498,6 +498,7 @@ class UdpToSerial:
         serial_device: str,
         baudrate: int,
         auto_start: bool = True,
+        led = None
     ):
         import serial
 
@@ -510,6 +511,8 @@ class UdpToSerial:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind(("127.0.0.1", udp_port))
         self.sock.settimeout(0.02)
+
+        self.led = led
 
         self.running = False
         self.thread = None
@@ -538,6 +541,7 @@ class UdpToSerial:
             try:
                 data, _ = self.sock.recvfrom(4096)
                 self.ser.write(data)
+                self.led.activity()
             except socket.timeout:
                 pass
     # def
