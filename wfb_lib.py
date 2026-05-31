@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import subprocess
 from dataclasses import dataclass
+import time
 
 from process_lib import (
     ProcessRunner,
@@ -165,18 +166,155 @@ class WfbTx:
         ], suppress_output=suppress_output)
 # class
 
-
 class WfbRx:
     def __init__(self, config: WfbConfig, runner: ProcessRunner):
         self.config = config
         self.runner = runner
 
-    def start(self, suppress_output=True):
-        return self.runner.start([
-            "sudo", "wfb_rx",
-            "-K", self.config.rx_key,
-            "-u", str(self.config.udp_port),
-            "-p", self.config.radio_port,
-            self.config.iface
-        ], suppress_output=suppress_output)
+    def start(
+        self,
+        suppress_output=True,
+        line_callback=None,
+        name=None,
+    ):
+        return self.runner.start(
+            [
+                "sudo",
+                "wfb_rx",
+                "-K",
+                self.config.rx_key,
+                "-u",
+                str(self.config.udp_port),
+                "-p",
+                self.config.radio_port,
+                self.config.iface,
+            ],
+            suppress_output=suppress_output,
+            line_callback=line_callback,
+            name=name,
+        )
+# class
+
+class WfbInstrumentationParser:
+    def __init__(
+        self,
+        name,
+        print_every_sec=1.0,
+    ):
+        self.name = name
+        self.print_every_sec = print_every_sec
+        self.last_print = 0.0
+
+        self.last_rx = None
+        self.last_pkt = None
+        self.last_tx = None
+
+    def handle_line(self, line):
+        #
+        # WFB can emit oddly spaced/indented lines.
+        #
+        line = line.strip()
+        if not line:
+            return
+
+        parts = line.split()
+
+        if len(parts) < 2:
+            return
+
+        timestamp = parts[0]
+        kind = parts[1]
+
+        if kind == "RX_ANT":
+            self.last_rx = self._parse_rx_ant(timestamp, parts)
+
+        elif kind == "TX_ANT":
+            self.last_tx = line
+
+        elif kind == "PKT":
+            self.last_pkt = self._parse_pkt(timestamp, parts)
+
+        self._maybe_print()
+
+    def _parse_rx_ant(self, timestamp, parts):
+        #
+        # Example:
+        # 1002202 RX_ANT 2412:0:20 0 34:-18:-16:-16:0:0:0
+        #
+        result = {
+            "timestamp": timestamp,
+            "raw": " ".join(parts),
+        }
+
+        try:
+            result["freq_info"] = parts[2]
+            result["antenna"] = parts[3]
+
+            vals = parts[4].split(":")
+
+            result["count"] = int(vals[0])
+            result["rssi"] = [
+                int(v)
+                for v in vals[1:4]
+            ]
+
+        except Exception:
+            result["parse_error"] = True
+
+        return result
+
+    def _parse_pkt(self, timestamp, parts):
+        #
+        # Keep raw plus integer fields. WFB PKT format varies by version.
+        #
+        result = {
+            "timestamp": timestamp,
+            "raw": " ".join(parts),
+        }
+
+        try:
+            result["values"] = [
+                int(v)
+                for v in parts[2].split(":")
+            ]
+
+        except Exception:
+            result["parse_error"] = True
+
+        return result
+
+    def _maybe_print(self):
+        now = time.time()
+
+        if now - self.last_print < self.print_every_sec:
+            return
+
+        self.last_print = now
+
+        msg = f"[{self.name}]"
+
+        if self.last_rx is not None:
+            rx = self.last_rx
+
+            if "parse_error" in rx:
+                msg += f" RX raw={rx['raw']}"
+
+            else:
+                msg += (
+                    f" RX freq={rx['freq_info']} "
+                    f"ant={rx['antenna']} "
+                    f"count={rx['count']} "
+                    f"rssi={rx['rssi']}"
+                )
+
+        if self.last_pkt is not None:
+            pkt = self.last_pkt
+
+            if "parse_error" in pkt:
+                msg += f" PKT raw={pkt['raw']}"
+
+            else:
+                pass # msg += f" PKT={pkt['values']}"
+
+        print("\r" + msg, flush=True)
 # class
