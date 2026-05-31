@@ -23,6 +23,10 @@ from rc_lib import (
     RcAckReceiver,
 )
 
+from led_lib import (
+    ActivityLed,
+)
+
 from io_reader_lib import (
     PicoJsonRcReader,
 )
@@ -80,6 +84,9 @@ picoRcReader = None
 mavlinkGateway = None
 videoRxer = None
 
+mavlinkLed = ActivityLed(21)
+rcLed = ActivityLed(20)
+
 try:
     WifiRadioSetup(rcTxerConfig).run()
 
@@ -100,6 +107,7 @@ try:
     rcRxer = RcAckReceiver(
         name="RC-ACK",
         port=rcRxerConfig.udp_port,
+        led=rcLed,
     )
 
     # Pico joystick/switch JSON -> RC channels
@@ -117,6 +125,7 @@ try:
         qgc_register_port=14555,
         qgc_out_port=14550,
         uplink_out_port=mavlinkTxerConfig.udp_port,
+        led=mavlinkLed,
     )
 
     # Video display/rebro

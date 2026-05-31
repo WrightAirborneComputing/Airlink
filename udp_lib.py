@@ -223,12 +223,14 @@ class QgcMavlinkGateway:
         qgc_register_port: int,
         qgc_out_port: int,
         uplink_out_port: int,
+        led = None,
         auto_start: bool = True,
     ):
         self.name = name
         self.client_addr = None
         self.running = False
         self.thread = None
+        self.led = led
 
         self.down_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.down_sock.bind(("127.0.0.1", downlink_in_port))
@@ -332,6 +334,7 @@ class QgcMavlinkGateway:
             try:
                 data, _ = self.down_sock.recvfrom(4096)
                 # print(f"\rGot [{len(data)}]",flush=True)
+                self.led.activity()
 
                 if self.client_addr is not None:
                     # self._decode_mavlink_packet(data)

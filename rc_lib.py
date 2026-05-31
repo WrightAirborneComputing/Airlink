@@ -219,8 +219,10 @@ class RcAckReceiver:
         self,
         name: str,
         port: int,
+        led = None,
         auto_start: bool = True,
     ):
+        self.led = led
         self.name = name
         self.port = port
 
@@ -266,6 +268,9 @@ class RcAckReceiver:
 
             try:
                 data, _ = self.sock.recvfrom(4096)
+
+                if self.led is not None:
+                    self.led.activity()
 
                 now = time.time()
 
