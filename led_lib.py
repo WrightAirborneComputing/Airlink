@@ -7,12 +7,10 @@ class ActivityLed:
     def __init__(
         self,
         gpio_pin,
-        flash_hz=2.0,
-        timeout_sec=0.5,
+        timeout_sec=0.25,
     ):
         self.led = LED(gpio_pin)
 
-        self.flash_period = 1.0 / flash_hz
         self.timeout_sec = timeout_sec
 
         self.last_activity = 0.0
@@ -32,8 +30,6 @@ class ActivityLed:
         self.led.off()
 
     def _run(self):
-        led_state = False
-
         while self.running:
 
             active = (
@@ -42,16 +38,8 @@ class ActivityLed:
             )
 
             if active:
-                led_state = not led_state
-
-                if led_state:
-                    self.led.on()
-                else:
-                    self.led.off()
-
-                time.sleep(self.flash_period / 2.0)
-
+                self.led.on()
             else:
-                led_state = False
                 self.led.off()
-                time.sleep(0.1)
+
+            time.sleep(0.05)
