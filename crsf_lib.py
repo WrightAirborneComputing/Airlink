@@ -2,6 +2,7 @@ import time
 import threading
 import serial
 
+
 class SerialByteOutput:
     def __init__(self, serial_device="/dev/ttyAMA1", baudrate=420000):
         self.ser = serial.Serial(
@@ -24,39 +25,25 @@ class PigpioSerialByteOutput:
     def __init__(self, tx_gpio=4, baudrate=420000):
         import pigpio
         import subprocess
-        import time
 
-        self.pigpio = pigpio
         self.tx_gpio = tx_gpio
         self.baudrate = baudrate
 
-        #
-        # Ensure pigpiod is running
-        #
         subprocess.run(
             ["sudo", "systemctl", "start", "pigpiod"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
 
-        # Give daemon a moment to come up
         time.sleep(0.25)
 
         self.pi = pigpio.pi()
 
         if not self.pi.connected:
-            raise RuntimeError(
-                "Could not connect to pigpiod"
-            )
+            raise RuntimeError("Could not connect to pigpiod")
 
-        self.pi.set_mode(
-            self.tx_gpio,
-            pigpio.OUTPUT
-        )
-
-        # UART idle state = high
+        self.pi.set_mode(self.tx_gpio, pigpio.OUTPUT)
         self.pi.write(self.tx_gpio, 1)
-    # def
 
     def write(self, data: bytes):
         self.pi.wave_clear()
@@ -64,14 +51,13 @@ class PigpioSerialByteOutput:
         self.pi.wave_add_serial(
             self.tx_gpio,
             self.baudrate,
-            data
+            data,
         )
+
         wave_id = self.pi.wave_create()
 
         if wave_id < 0:
-            raise RuntimeError(
-                f"pigpio wave_create failed: {wave_id}"
-            )
+            raise RuntimeError(f"pigpio wave_create failed: {wave_id}")
 
         self.pi.wave_send_once(wave_id)
 
@@ -79,8 +65,12 @@ class PigpioSerialByteOutput:
             time.sleep(0.0005)
 
         self.pi.wave_delete(wave_id)
-    # def
-# class
+
+    def close(self):
+        self.pi.wave_clear()
+        self.pi.write(self.tx_gpio, 1)
+        self.pi.stop()
+
 
 class CrsfRcOutput:
     CRSF_ADDRESS_FLIGHT_CONTROLLER = 0xC8
@@ -113,17 +103,20 @@ class CrsfRcOutput:
         # CRSF channel values:
         # 172=1000us, 992=1500us, 1811=2000us approx
         self.channels = [992] * 16
+        self.lock = threading.Lock()
+        self.update_count = 0
 
         self.running = False
         self.thread = None
 
+        self.set_channels_us(
+            1000, 1200, 1200, 1300,
+            1000, 2000, 1000, 2000,
+            1000, 2000, 1000, 2000,
+        )
+
         if auto_start:
             self.start()
-        # if
-
-        self.set_channels_us(1000,1200,1200,1300,1000,2000,1000,2000,1000,2000,1000,2000)
-
-    # def
 
     def close(self):
         self.stop()
@@ -146,7 +139,7 @@ class CrsfRcOutput:
 
     @staticmethod
     def us_to_crsf(us: int) -> int:
-        us = max(1000, min(2000, us))
+        us = max(1000, min(2000, int(us)))
 
         return int(
             round(
@@ -160,33 +153,35 @@ class CrsfRcOutput:
     def set_channels_us(self,ch1,ch2,ch3,ch4,ch5,ch6,ch7,ch8,ch9,ch10,ch11,ch12):
         values = [ch1,ch2,ch3,ch4,ch5,ch6,ch7,ch8,ch9,ch10,ch11,ch12]
 
-        for i, us in enumerate(values):
-            us = max(1000, min(2000, int(us)))
-            self.channels[i] = self.us_to_crsf(us)
-        # for
+        with self.lock:
+            for i, us in enumerate(values):
+                us = max(1000, min(2000, int(us)))
+                self.channels[i] = self.us_to_crsf(us)
+
+            self.update_count += 1
     # def
 
     def set_channels_crsf(self, ch1_to_ch12):
         if len(ch1_to_ch12) != 12:
-            raise ValueError(
-                "Expected exactly 12 channel values"
-            )
+            raise ValueError("Expected exactly 12 channel values")
 
-        for i, value in enumerate(ch1_to_ch12):
-            self.channels[i] = max(172,min(1811, int(value)))
-        # for
+        with self.lock:
+            for i, value in enumerate(ch1_to_ch12):
+                self.channels[i] = max(172, min(1811, int(value)))
+
+            self.update_count += 1
     # def
 
     def _pack_channels(self) -> bytes:
+        with self.lock:
+            channels = list(self.channels)
+
         value = 0
 
-        for i, ch in enumerate(self.channels):
+        for i, ch in enumerate(channels):
             value |= (ch & 0x7FF) << (11 * i)
 
-        return value.to_bytes(
-            22,
-            byteorder="little"
-        )
+        return value.to_bytes(22, byteorder="little")
 
     def make_frame(self) -> bytes:
         payload = self._pack_channels()
@@ -195,11 +190,8 @@ class CrsfRcOutput:
             self.CRSF_FRAMETYPE_RC_CHANNELS_PACKED
         ]) + payload
 
-        crc = self._crc8_dvb_s2(
-            frame_type_and_payload
-        )
+        crc = self._crc8_dvb_s2(frame_type_and_payload)
 
-        # length = type + payload + crc
         frame = bytes([
             self.CRSF_ADDRESS_FLIGHT_CONTROLLER,
             len(frame_type_and_payload) + 1,
@@ -215,16 +207,16 @@ class CrsfRcOutput:
             return
 
         self.running = True
+
         self.thread = threading.Thread(
             target=self._run,
             daemon=True,
         )
+
         self.thread.start()
 
         print(
-            f"\r"
-            f"[{self.name}] started at "
-            f"{self.rate_hz} Hz",
+            f"\r[{self.name}] started at {self.rate_hz} Hz",
             flush=True,
         )
 
