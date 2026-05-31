@@ -6,10 +6,10 @@ class PiCamVideoToUdp:
         self,
         name: str,
         udp_port: int,
-        width: int = 640,
-        height: int = 480,
-        framerate: int = 8,
-        bitrate: int = 700000,
+        width: int = 320,
+        height: int = 240,
+        framerate: int = 5,
+        bitrate: int = 300000,
         mtu: int = 1200,
         auto_start: bool = True,
     ):
@@ -87,23 +87,20 @@ class UdpRtpH264VideoDisplay:
         if self.proc is not None:
             return
 
-        print(
-            f"\r"
-            f"\r[{self.name}] Displaying RTP/H264 from UDP 127.0.0.1:{self.port}",
-            flush=True
-        )
+        print(f"\r" f"\r[{self.name}] Displaying RTP/H264 from UDP 127.0.0.1:{self.port}", flush=True)
 
         cmd = [
             "gst-launch-1.0", "-v",
-            "udpsrc", f"address=127.0.0.1", f"port={self.port}",
-            "!", "application/x-rtp,media=video,encoding-name=H264,payload=96,clock-rate=90000",
-            "!", "rtph264depay",
-            "!", "h264parse",
-            "!", "avdec_h264",
-            "!", "videoscale",
-            "!", f"video/x-raw,width={self.width},height={self.height}",
-            "!", "videoconvert",
-            "!", "autovideosink", "sync=false",
+
+            "udpsrc", "address=127.0.0.1", f"port={self.port}",
+                "!","application/x-rtp,media=video,encoding-name=H264,payload=96,clock-rate=90000",
+                "!","rtph264depay",
+                "!","h264parse",
+                "!","queue","max-size-buffers=1","leaky=downstream",
+                "!","avdec_h264",
+                "!",f"video/x-raw,width={self.width},height={self.height}",
+                "!","videoconvert",
+                "!","autovideosink","sync=false",
         ]
 
         self.proc = subprocess.Popen(
