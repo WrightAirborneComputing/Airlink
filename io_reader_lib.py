@@ -271,8 +271,8 @@ class PicoJsonRcReader:
         ch4 = self._axis_to_us("yaw", p.get("p2_a0_v", 0.0))
 
         ch5 = self._sw2_to_us(p.get("p2_sw3", 0))
-        ch6 = self._sw3_to_us(p.get("p1_sw1", 0))
-        ch7 = self._sw3_to_us(p.get("p2_sw1", 0))
+        ch6 = self._sw3_to_us(p.get("p2_sw1", 0))
+        ch7 = self._sw3_to_us(p.get("p1_sw1", 0))
         ch8 = self._sw2_to_us(p.get("p2_sw2", 0))
         ch9 = self._sw2_to_us(p.get("p1_sw2", 0))
         ch10 = self._sw2_to_us(p.get("p1_sw3", 0))
@@ -284,6 +284,7 @@ class PicoJsonRcReader:
     def _handle_line(self, line):
         try:
             packet = json.loads(line)
+            # print("\rLine:" + str(packet))
             channels = self._packet_to_channels(packet)
             self.rc_sender.set_channels(*channels)
 
