@@ -2,6 +2,8 @@
 
 import time
 
+from debug_lib import print_banner
+
 from process_lib import (
     ProcessRunner,
 )
@@ -30,6 +32,28 @@ from video_lib import (
 
 from crsf_lib import (
     CrsfRcOutput
+)
+
+print_banner(
+    "AIRLINK AIR",
+    udp_ports=[
+        9000,
+        9001,
+        9002,
+        9003,
+    ],
+    serial_ports=[
+        "/dev/serial0",
+    ],
+    gpios=[
+        "CRSF TX GPIO4",
+    ],
+    radio_ports=[
+        "0 RC",
+        "1 MAVLINK-DN",
+        "2 MAVLINK-UP",
+        "3 VIDEO",
+    ],
 )
 
 runner = ProcessRunner()

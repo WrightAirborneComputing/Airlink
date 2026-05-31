@@ -2,6 +2,8 @@
 
 import time
 
+from debug_lib import print_banner
+
 from process_lib import (
     ProcessRunner,
 )
@@ -35,6 +37,32 @@ from video_lib import (
     UdpRtpH264VideoDisplay,
 )
 
+print_banner(
+    "AIRLINK GROUND",
+    udp_ports=[
+        9000,
+        9001,
+        9002,
+        9003,
+        9004,
+        14550,
+        14555,
+    ],
+    serial_ports=[
+        "/dev/serial0",
+    ],
+    gpios=[
+        "LED20 RC",
+        "LED21 MAVLINK",
+    ],
+    radio_ports=[
+        "0 RC-UP",
+        "1 RC-ACK",
+        "2 MAVLINK-UP",
+        "3 MAVLINK-DN",
+        "4 VIDEO",
+    ],
+)
 
 runner = ProcessRunner()
 
