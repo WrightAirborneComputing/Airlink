@@ -94,11 +94,14 @@ class RcPacketReceiver:
         in_port: int,
         ack_port: int,
         channel_callback=None,
+        led = None,
         auto_start: bool = True,
     ):
         self.name = name
         self.in_port = in_port
         self.ack_port = ack_port
+
+        self.led = led
 
         self.channel_callback = channel_callback
 
@@ -177,6 +180,8 @@ class RcPacketReceiver:
                 latency_ms = (
                     rx_time - tx_time
                 ) * 1000.0
+
+                self.led.activity()
 
                 if(False):
                     print(
