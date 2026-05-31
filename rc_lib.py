@@ -165,9 +165,7 @@ class RcPacketReceiver:
                 #
                 if self.channel_callback is not None:
                     try:
-                        self.channel_callback(
-                            *self.channels
-                        )
+                        self.channel_callback(*self.channels)
                     except Exception as e:
                         print(
                             f"\r"
