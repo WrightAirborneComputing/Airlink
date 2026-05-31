@@ -13,6 +13,7 @@ from wfb_lib import (
     WifiRadioSetup,
     WfbTx,
     WfbRx,
+    WfbInstrumentationParser,
 )
 
 from udp_lib import (
@@ -36,6 +37,7 @@ from io_reader_lib import (
 from video_lib import (
     UdpRtpH264VideoDisplay,
 )
+
 
 print_banner(
     "AIRLINK GROUND",
@@ -69,7 +71,7 @@ runner = ProcessRunner()
 rcTxerConfig = WfbConfig(
     iface="wlan1",
     channel="1",
-    rx_key="/etc/wfb/gs.key",
+    tx_key="/etc/wfb/gs.key",
     udp_port=9000,
     radio_port="0",
 )
@@ -112,6 +114,10 @@ picoRcReader = None
 mavlinkGateway = None
 videoRxer = None
 
+rcStats = WfbInstrumentationParser("RC-RX")
+mavStats = WfbInstrumentationParser("MAVLINK-RX")
+videoStats = WfbInstrumentationParser("VIDEO-RX")
+
 mavlinkLed = ActivityLed(21)
 rcLed = ActivityLed(20)
 
@@ -119,11 +125,27 @@ try:
     WifiRadioSetup(rcTxerConfig).run()
 
     # WFB channels
-    WfbTx(rcTxerConfig, runner).start(suppress_output=True)
-    WfbRx(rcRxerConfig, runner).start(suppress_output=True)
-    WfbTx(mavlinkTxerConfig, runner).start(suppress_output=True)
-    WfbRx(mavlinkRxerConfig, runner).start(suppress_output=True)
-    WfbRx(videoRxerConfig, runner).start(suppress_output=True)
+    WfbTx(rcTxerConfig, runner).start()
+
+    WfbRx(rcRxerConfig, runner).start(
+        suppress_output=False,
+        line_callback=rcStats.handle_line,
+        name="RC-RX",
+    )
+
+    WfbTx(mavlinkTxerConfig, runner).start()
+
+    WfbRx(mavlinkRxerConfig, runner).start(
+        suppress_output=False,
+        line_callback=mavStats.handle_line,
+        name="MAVLINK-RX",
+    )
+
+    WfbRx(videoRxerConfig, runner).start(
+        suppress_output=False,
+        line_callback=videoStats.handle_line,
+        name="VIDEO-RX",
+    )
 
     # RC uplink and ACK receiver
     rcTxer = RcPacketSender(
@@ -193,5 +215,8 @@ finally:
 
     if videoRxer is not None:
         videoRxer.stop()
+
+    mavlinkLed.stop()
+    rcLed.stop()
 
     runner.stop_all()
