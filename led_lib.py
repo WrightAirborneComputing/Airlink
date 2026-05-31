@@ -8,7 +8,7 @@ class ActivityLed:
         self,
         gpio_pin,
         flash_hz=2.0,
-        timeout_sec=1.0,
+        timeout_sec=0.5,
     ):
         self.led = LED(gpio_pin)
 
