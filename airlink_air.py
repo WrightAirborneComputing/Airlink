@@ -108,7 +108,7 @@ videoTxerConfig = WfbConfig(
 rcStats = WfbInstrumentationParser("RC-RX")
 mavStats = WfbInstrumentationParser("MAVLINK-RX")
 
-mavlinkLed = ActivityLed(21)
+mavlinkLed = ActivityLed(21,timeout_sec=1.0)
 rcLed = ActivityLed(20)
 
 rcRxer = None
