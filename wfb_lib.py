@@ -300,21 +300,22 @@ class WfbInstrumentationParser:
                 msg += f" RX raw={rx['raw']}"
 
             else:
-                msg += (
-                    f" RX freq={rx['freq_info']} "
-                    f"ant={rx['antenna']} "
-                    f"count={rx['count']} "
-                    f"rssi={rx['rssi']}"
-                )
+                if(False):
+                    msg += (
+                        f" RX freq={rx['freq_info']} "
+                        f"ant={rx['antenna']} "
+                        f"count={rx['count']} "
+                        f"rssi={rx['rssi']}"
+                    )
+                # if
 
         if self.last_pkt is not None:
             pkt = self.last_pkt
 
             if "parse_error" in pkt:
                 msg += f" PKT raw={pkt['raw']}"
-
             else:
                 pass # msg += f" PKT={pkt['values']}"
 
-        print("\r" + msg, flush=True)
+        # print("\r" + msg, flush=True)
 # class

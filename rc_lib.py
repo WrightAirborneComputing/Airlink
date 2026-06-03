@@ -67,10 +67,31 @@ class RcPacketSender:
         self.running = False
 
     def _run(self):
-        print(f"\r[{self.name}] RC sender -> UDP {self.port}", flush=True)
+        print(
+            f"\r[{self.name}] RC sender -> UDP {self.port} "
+            f"period={self.interval_sec:.3f}s "
+            f"rate={1.0 / self.interval_sec:.1f}Hz",
+            flush=True,
+        )
+
+        last_send_time = None
+        period_sum_ms = 0.0
+        period_count = 0
+        max_period_ms = 0.0
+        last_print_time = time.time()
 
         while self.running:
-            tx_time = time.time()
+            now = time.time()
+
+            if last_send_time is not None:
+                period_ms = (now - last_send_time) * 1000.0
+                period_sum_ms += period_ms
+                period_count += 1
+                max_period_ms = max(max_period_ms, period_ms)
+
+            last_send_time = now
+
+            tx_time = now
 
             with self.lock:
                 channels = list(self.channels)
@@ -87,7 +108,32 @@ class RcPacketSender:
             )
 
             self.frame_count += 1
-            time.sleep(self.interval_sec)
+
+            if now - last_print_time >= 1.0:
+                avg_period_ms = (
+                    period_sum_ms / period_count
+                    if period_count > 0
+                    else 0.0
+                )
+
+                if(False):
+                    print(
+                        f"\r[{self.name}] "
+                        f"tx={self.frame_count} "
+                        f"avg_period={avg_period_ms:.1f} ms "
+                        f"max_period={max_period_ms:.1f} ms",
+                        flush=True,
+                    )
+
+                last_print_time = now
+                period_sum_ms = 0.0
+                period_count = 0
+                max_period_ms = 0.0
+
+            sleep_time = self.interval_sec - (time.time() - now)
+
+            if sleep_time > 0:
+                time.sleep(sleep_time)
 
 
 class RcPacketReceiver:
@@ -98,7 +144,7 @@ class RcPacketReceiver:
         ack_port: int,
         led=None,
         channel_callback=None,
-        latency_warn_ms: float = 250.0,
+        period_warn_ms: float = 250.0,
         print_every_sec: float = 1.0,
         auto_start: bool = True,
     ):
@@ -108,7 +154,7 @@ class RcPacketReceiver:
         self.led = led
         self.channel_callback = channel_callback
 
-        self.latency_warn_ms = latency_warn_ms
+        self.period_warn_ms = period_warn_ms
         self.print_every_sec = print_every_sec
 
         self.running = False
@@ -127,11 +173,16 @@ class RcPacketReceiver:
         self.last_frame = None
         self.rx_count = 0
         self.lost_count = 0
-        self.dropped_stale = 0
         self.late_count = 0
 
+        self.last_rx_time = None
+        self.period_sum_ms = 0.0
+        self.period_count = 0
+        self.max_period_ms = 0.0
+
+        self.max_frame_gap = 0
+
         self.last_print_time = time.time()
-        self.max_latency_ms = 0.0
 
         if auto_start:
             self.start()
@@ -151,22 +202,12 @@ class RcPacketReceiver:
         self.running = False
 
     def _recv_latest(self):
-        latest = None
-        drained = 0
-
-        while True:
-            try:
-                latest = self.sock.recvfrom(4096)
-                drained += 1
-            except BlockingIOError:
-                break
-            except socket.error:
-                break
-
-        if drained > 1:
-            self.dropped_stale += drained - 1
-
-        return latest
+        try:
+            return self.sock.recvfrom(4096)
+        except BlockingIOError:
+            return None
+        except socket.error:
+            return None
 
     def _maybe_print_summary(self):
         now = time.time()
@@ -176,29 +217,25 @@ class RcPacketReceiver:
 
         self.last_print_time = now
 
-        total_seen = self.rx_count + self.lost_count
+        avg_period_ms = 0.0
+        if self.period_count > 0:
+            avg_period_ms = self.period_sum_ms / self.period_count
 
-        loss_pct = 0.0
-        if total_seen > 0:
-            loss_pct = 100.0 * self.lost_count / total_seen
+        if(True):
+            print(
+                f"\r[{self.name}] "
+                f"rx={self.rx_count} "
+                f"lost={self.lost_count} "
+                f"avg_period={avg_period_ms:.1f} ms "
+                f"max_period={self.max_period_ms:.1f} ms "
+                f"max_gap={self.max_frame_gap}",
+                flush=True,
+            )
 
-        late_pct = 0.0
-        if self.rx_count > 0:
-            late_pct = 100.0 * self.late_count / self.rx_count
-
-        print(
-            f"\r[{self.name}] "
-            f"rx={self.rx_count} "
-            f"lost={self.lost_count} "
-            f"loss={loss_pct:.1f}% "
-            f"stale_drop={self.dropped_stale} "
-            f"late>{self.latency_warn_ms:.0f}ms="
-            f"{self.late_count} ({late_pct:.1f}%) "
-            f"max_latency={self.max_latency_ms:.1f} ms",
-            flush=True,
-        )
-
-        self.max_latency_ms = 0.0
+        self.period_sum_ms = 0.0
+        self.period_count = 0
+        self.max_period_ms = 0.0
+        self.max_frame_gap = 0
 
     def _run(self):
         print(
@@ -211,11 +248,26 @@ class RcPacketReceiver:
 
             if latest is None:
                 self._maybe_print_summary()
-                time.sleep(0.002)
+                time.sleep(0.001)
                 continue
 
             data, _ = latest
             rx_time = time.time()
+
+            if self.last_rx_time is not None:
+                period_ms = (rx_time - self.last_rx_time) * 1000.0
+
+                self.period_sum_ms += period_ms
+                self.period_count += 1
+                self.max_period_ms = max(
+                    self.max_period_ms,
+                    period_ms,
+                )
+
+                if period_ms > self.period_warn_ms:
+                    self.late_count += 1
+
+            self.last_rx_time = rx_time
 
             try:
                 text = data.decode("ascii").strip()
@@ -234,6 +286,12 @@ class RcPacketReceiver:
                 channels = [int(v) for v in fields[2:]]
 
                 if self.last_frame is not None:
+                    frame_gap = frame_count - self.last_frame
+                    self.max_frame_gap = max(
+                        self.max_frame_gap,
+                        frame_gap,
+                    )
+
                     expected = self.last_frame + 1
 
                     if frame_count > expected:
@@ -241,18 +299,11 @@ class RcPacketReceiver:
 
                     elif frame_count <= self.last_frame:
                         continue
+                else:
+                    self.max_frame_gap = max(self.max_frame_gap, 1)
 
                 self.last_frame = frame_count
                 self.rx_count += 1
-
-                latency_ms = (rx_time - tx_time) * 1000.0
-                self.max_latency_ms = max(
-                    self.max_latency_ms,
-                    latency_ms,
-                )
-
-                if latency_ms > self.latency_warn_ms:
-                    self.late_count += 1
 
                 self.frame_count = frame_count
                 self.channels = channels
@@ -270,12 +321,12 @@ class RcPacketReceiver:
                             flush=True,
                         )
 
-                ack = f"{frame_count} {tx_time:.6f} {rx_time:.6f}"
-
-                self.ack_sock.sendto(
-                    ack.encode("ascii"),
-                    ("127.0.0.1", self.ack_port),
-                )
+                if True:
+                    ack = f"{frame_count} {tx_time:.6f} {rx_time:.6f}"
+                    self.ack_sock.sendto(
+                        ack.encode("ascii"),
+                        ("127.0.0.1", self.ack_port),
+                    )
 
                 self._maybe_print_summary()
 
@@ -284,7 +335,7 @@ class RcPacketReceiver:
                     f"\r[{self.name}] receiver exception: {e}",
                     flush=True,
                 )
-
+# class
 
 class RcAckReceiver:
     def __init__(
@@ -315,13 +366,14 @@ class RcAckReceiver:
 
         self.rx_count = 0
         self.lost_count = 0
-        self.stale_drop_count = 0
         self.late_count = 0
 
         self.last_print_time = time.time()
         self.last_ack_time = time.time()
 
         self.max_total_ms = 0.0
+        self.latency_sum_ms = 0.0
+        self.latency_count = 0
 
         if auto_start:
             self.start()
@@ -341,22 +393,13 @@ class RcAckReceiver:
         self.running = False
 
     def _recv_latest(self):
-        latest = None
-        drained = 0
-
-        while True:
-            try:
-                latest = self.sock.recvfrom(4096)
-                drained += 1
-            except BlockingIOError:
-                break
-            except socket.error:
-                break
-
-        if drained > 1:
-            self.stale_drop_count += drained - 1
-
-        return latest
+        try:
+            return self.sock.recvfrom(4096)
+        except BlockingIOError:
+            return None
+        except socket.error:
+            return None
+    # def
 
     def _handle_ack(self, frame_count, tx_time, now):
         if self.last_frame is not None:
@@ -376,10 +419,18 @@ class RcAckReceiver:
             self.led.activity()
 
         total_ms = (now - tx_time) * 1000.0
-        self.max_total_ms = max(self.max_total_ms, total_ms)
+
+        self.max_total_ms = max(
+            self.max_total_ms,
+            total_ms,
+        )
+
+        self.latency_sum_ms += total_ms
+        self.latency_count += 1
 
         if total_ms > self.latency_warn_sec * 1000.0:
             self.late_count += 1
+
             print(
                 f"\r[{self.name}] LATE frame={frame_count} "
                 f"total={total_ms:.1f} ms",
@@ -400,26 +451,31 @@ class RcAckReceiver:
         if total_seen > 0:
             loss_pct = 100.0 * self.lost_count / total_seen
 
-        late_pct = 0.0
-        if self.rx_count > 0:
-            late_pct = 100.0 * self.late_count / self.rx_count
-
         age_ms = (now - self.last_ack_time) * 1000.0
+
+        avg_total_ms = 0.0
+        if self.latency_count > 0:
+            avg_total_ms = (
+                self.latency_sum_ms /
+                self.latency_count
+            )
 
         print(
             f"\r[{self.name}] "
             f"rx={self.rx_count} "
             f"lost={self.lost_count} "
             f"loss={loss_pct:.1f}% "
-            f"stale_drop={self.stale_drop_count} "
             f"late>{self.latency_warn_sec * 1000:.0f}ms="
-            f"{self.late_count} ({late_pct:.1f}%) "
+            f"{self.late_count} "
+            f"avg_total={avg_total_ms:.1f} ms "
             f"max_total={self.max_total_ms:.1f} ms "
             f"last_age={age_ms:.0f} ms",
             flush=True,
         )
 
         self.max_total_ms = 0.0
+        self.latency_sum_ms = 0.0
+        self.latency_count = 0
 
     def _run(self):
         print(f"\r[{self.name}] ACK receiver UDP {self.port}", flush=True)
@@ -432,7 +488,7 @@ class RcAckReceiver:
                 if now - self.last_ack_time > self.latency_warn_sec:
                     self._maybe_print_summary(now)
 
-                time.sleep(0.002)
+                time.sleep(0.001)
                 continue
 
             data, _ = latest
@@ -447,7 +503,11 @@ class RcAckReceiver:
                 frame_count = int(fields[0])
                 tx_time = float(fields[1])
 
-                self._handle_ack(frame_count, tx_time, now)
+                self._handle_ack(
+                    frame_count,
+                    tx_time,
+                    now,
+                )
 
             except Exception as e:
                 print(f"\r[{self.name}] ack exception: {e}", flush=True)
