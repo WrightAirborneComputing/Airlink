@@ -10,7 +10,7 @@ class RcPacketSender:
         self,
         name: str,
         port: int,
-        interval_sec: float = 0.02,
+        interval_sec: float = 0.04,
         auto_start: bool = True,
     ):
         self.name = name
@@ -447,12 +447,6 @@ class RcAckReceiver:
 
         total_seen = self.rx_count + self.lost_count
 
-        loss_pct = 0.0
-        if total_seen > 0:
-            loss_pct = 100.0 * self.lost_count / total_seen
-
-        age_ms = (now - self.last_ack_time) * 1000.0
-
         avg_total_ms = 0.0
         if self.latency_count > 0:
             avg_total_ms = (
@@ -464,12 +458,10 @@ class RcAckReceiver:
             f"\r[{self.name}] "
             f"rx={self.rx_count} "
             f"lost={self.lost_count} "
-            f"loss={loss_pct:.1f}% "
             f"late>{self.latency_warn_sec * 1000:.0f}ms="
             f"{self.late_count} "
             f"avg_total={avg_total_ms:.1f} ms "
-            f"max_total={self.max_total_ms:.1f} ms "
-            f"last_age={age_ms:.0f} ms",
+            f"max_total={self.max_total_ms:.1f} ms ",
             flush=True,
         )
 

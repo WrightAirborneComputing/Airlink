@@ -155,11 +155,15 @@ class WfbTx:
     def __init__(self, config: WfbConfig, runner: ProcessRunner):
         self.config = config
         self.runner = runner
+        self.config.rs_k = 1
+        self.config.rs_n = 1
 
     def start(self, suppress_output=True):
         return self.runner.start([
             "sudo", "wfb_tx",
             "-K", self.config.tx_key,
+            "-k", str(self.config.rs_k),
+            "-n", str(self.config.rs_n),
             "-u", str(self.config.udp_port),
             "-p", self.config.radio_port,
             self.config.iface
