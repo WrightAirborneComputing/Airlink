@@ -55,8 +55,8 @@ class RssiLedBar:
     def __init__(
         self,
         gpio_pins=(26,19,13,6,5),
-        min_db=-80,
-        max_db=0,
+        max_db=-20,
+        min_db=-85,
     ):
         # gpio_pins ordered top -> bottom
         self.leds = [LED(pin) for pin in gpio_pins]
