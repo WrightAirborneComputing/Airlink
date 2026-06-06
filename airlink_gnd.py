@@ -124,48 +124,38 @@ rcLed = ActivityLed(20)
 try:
     WifiRadioSetup(rcTxerConfig).run()
 
-    if(True):
-        WfbTx(rcTxerConfig, runner).start()
-        WfbRx(rcRxerConfig, runner).start(suppress_output=False,line_callback=rcStats.handle_line,name="RC-RX",)
+    # WFB channels
+    WfbTx(rcTxerConfig, runner).start()
+    WfbRx(rcRxerConfig, runner).start(suppress_output=False,line_callback=rcStats.handle_line,name="RC-RX",)
+    WfbTx(mavlinkTxerConfig, runner).start()
+    WfbRx(mavlinkRxerConfig, runner).start(suppress_output=True,line_callback=mavStats.handle_line,name="MAVLINK-RX",)
+    WfbRx(videoRxerConfig, runner).start(suppress_output=True,line_callback=videoStats.handle_line,name="VIDEO-RX",)
 
-        rcTxer = RcPacketSender(name="RC-UP",port=rcTxerConfig.udp_port)
-        picoRcReader = PicoJsonRcReader(name="PICO-RC",serial_device="/dev/serial0",baudrate=115200,rc_sender=rcTxer,)
-        rcRxer = RcAckReceiver(name="RC-ACK",port=rcRxerConfig.udp_port,led=rcLed,)
+    # RC uplink and ACK receiver
+    rcTxer = RcPacketSender(name="RC-UP",port=rcTxerConfig.udp_port)
+    rcRxer = RcAckReceiver(name="RC-ACK",port=rcRxerConfig.udp_port,led=rcLed,rssi_getter=rcStats.get_rssi,)
+
+    # Pico joystick/switch JSON -> RC channels
+    picoRcReader = PicoJsonRcReader(name="PICO-RC",serial_device="/dev/serial0",baudrate=115200,rc_sender=rcTxer,)
+
+    # QGC MAVLink bridge
+    mavlinkGateway = QgcMavlinkGateway(name="MAVLINK",downlink_in_port=mavlinkRxerConfig.udp_port,qgc_register_port=14555,qgc_out_port=14550,uplink_out_port=mavlinkTxerConfig.udp_port,led=mavlinkLed,)
+
+    # Video display/rebro
+    if False:
+        videoRxer = UdpRtpH264VideoDisplay(
+            name="VIDEO",
+            port=videoRxerConfig.udp_port,
+            width=320,
+            height=180,
+        )
     else:
-        # WFB channels
-        WfbTx(rcTxerConfig, runner).start()
-        WfbRx(rcRxerConfig, runner).start(suppress_output=False,line_callback=rcStats.handle_line,name="RC-RX",)
-        WfbTx(mavlinkTxerConfig, runner).start()
-        WfbRx(mavlinkRxerConfig, runner).start(suppress_output=False,line_callback=mavStats.handle_line,name="MAVLINK-RX",)
-        WfbRx(videoRxerConfig, runner).start(suppress_output=False,line_callback=videoStats.handle_line,name="VIDEO-RX",)
-
-        # RC uplink and ACK receiver
-        rcTxer = RcPacketSender(name="RC-UP",port=rcTxerConfig.udp_port)
-        rcRxer = RcAckReceiver(name="RC-ACK",port=rcRxerConfig.udp_port,led=rcLed,)
-
-        # Pico joystick/switch JSON -> RC channels
-        picoRcReader = PicoJsonRcReader(name="PICO-RC",serial_device="/dev/serial0",baudrate=115200,rc_sender=rcTxer,)
-
-        # QGC MAVLink bridge
-        mavlinkGateway = QgcMavlinkGateway(name="MAVLINK",downlink_in_port=mavlinkRxerConfig.udp_port,qgc_register_port=14555,qgc_out_port=14550,uplink_out_port=mavlinkTxerConfig.udp_port,led=mavlinkLed,)
-
-        # Video display/rebro
-        if False:
-            videoRxer = UdpRtpH264VideoDisplay(
-                name="VIDEO",
-                port=videoRxerConfig.udp_port,
-                width=320,
-                height=180,
-            )
-        else:
-            videoRxer = DynamicUdpForwarder(
-                name="VIDEO",
-                in_port=videoRxerConfig.udp_port,
-                get_out_host=mavlinkGateway.get_client_ip,
-                out_port=5600,
-            )
-        # if
-    # if
+        videoRxer = DynamicUdpForwarder(
+            name="VIDEO",
+            in_port=videoRxerConfig.udp_port,
+            get_out_host=mavlinkGateway.get_client_ip,
+            out_port=5600,
+        )
 
     while True:
         time.sleep(1)

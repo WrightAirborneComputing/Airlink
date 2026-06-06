@@ -204,19 +204,23 @@ class WfbInstrumentationParser:
         self,
         name,
         print_every_sec=1.0,
+        enable_print=False,
     ):
         self.name = name
         self.print_every_sec = print_every_sec
+        self.enable_print = enable_print
         self.last_print = 0.0
 
         self.last_rx = None
         self.last_pkt = None
         self.last_tx = None
 
+        self.rssi = None
+
+    def get_rssi(self):
+        return self.rssi
+
     def handle_line(self, line):
-        #
-        # WFB can emit oddly spaced/indented lines.
-        #
         line = line.strip()
         if not line:
             return
@@ -232,19 +236,23 @@ class WfbInstrumentationParser:
         if kind == "RX_ANT":
             self.last_rx = self._parse_rx_ant(timestamp, parts)
 
+            if self.last_rx is not None and "rssi" in self.last_rx:
+                values = self.last_rx["rssi"]
+
+                if len(values) > 0:
+                    # Use the strongest/least-negative value as the single RSSI.
+                    self.rssi = max(values)
+
         elif kind == "TX_ANT":
             self.last_tx = line
 
         elif kind == "PKT":
             self.last_pkt = self._parse_pkt(timestamp, parts)
 
-        self._maybe_print()
+        if self.enable_print:
+            self._maybe_print()
 
     def _parse_rx_ant(self, timestamp, parts):
-        #
-        # Example:
-        # 1002202 RX_ANT 2412:0:20 0 34:-18:-16:-16:0:0:0
-        #
         result = {
             "timestamp": timestamp,
             "raw": " ".join(parts),
@@ -268,9 +276,6 @@ class WfbInstrumentationParser:
         return result
 
     def _parse_pkt(self, timestamp, parts):
-        #
-        # Keep raw plus integer fields. WFB PKT format varies by version.
-        #
         result = {
             "timestamp": timestamp,
             "raw": " ".join(parts),
@@ -302,24 +307,12 @@ class WfbInstrumentationParser:
 
             if "parse_error" in rx:
                 msg += f" RX raw={rx['raw']}"
-
             else:
-                if(False):
-                    msg += (
-                        f" RX freq={rx['freq_info']} "
-                        f"ant={rx['antenna']} "
-                        f"count={rx['count']} "
-                        f"rssi={rx['rssi']}"
-                    )
-                # if
+                msg += (
+                    f" RX freq={rx['freq_info']} "
+                    f"ant={rx['antenna']} "
+                    f"rssi={self.rssi}"
+                )
 
-        if self.last_pkt is not None:
-            pkt = self.last_pkt
-
-            if "parse_error" in pkt:
-                msg += f" PKT raw={pkt['raw']}"
-            else:
-                pass # msg += f" PKT={pkt['values']}"
-
-        # print("\r" + msg, flush=True)
+        print("\r" + msg, flush=True)
 # class

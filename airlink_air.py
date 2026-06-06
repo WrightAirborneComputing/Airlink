@@ -120,34 +120,23 @@ videoTxer = None
 try:
     WifiRadioSetup(rcRxerConfig).run()
 
-    if(True):
-        WfbRx(rcRxerConfig, runner).start(suppress_output=False,line_callback=rcStats.handle_line,name="RC-RX",)
-        WfbTx(rcTxerConfig, runner).start()
-
-        crsfTxer = CrsfRcOutput(name="CRSF",use_pigpio=True,tx_gpio=4,baudrate=420000,rate_hz=50,)
-        rcRxer = RcPacketReceiver(name="RC-UP",in_port=rcRxerConfig.udp_port,ack_port=rcTxerConfig.udp_port,channel_callback=crsfTxer.set_channels_us,led=rcLed,)
-    else:
-        # WFB channels
-        WfbRx(rcRxerConfig, runner).start(suppress_output=False,line_callback=rcStats.handle_line,name="RC-RX",)
-        WfbTx(rcTxerConfig, runner).start()
-        WfbRx(mavlinkRxerConfig, runner).start(suppress_output=False,line_callback=mavStats.handle_line,name="MAVLINK-RX",)
-        WfbTx(mavlinkTxerConfig, runner).start()
-        WfbTx(videoTxerConfig, runner).start()
+    # WFB channels
+    WfbRx(rcRxerConfig, runner).start(suppress_output=False,line_callback=rcStats.handle_line,name="RC-RX",)
+    WfbTx(rcTxerConfig, runner).start()
+    WfbRx(mavlinkRxerConfig, runner).start(suppress_output=False,line_callback=mavStats.handle_line,name="MAVLINK-RX",)
+    WfbTx(mavlinkTxerConfig, runner).start()
+    WfbTx(videoTxerConfig, runner).start()
     
-        # CRSF interface
-        crsfTxer = CrsfRcOutput(name="CRSF",use_pigpio=True,tx_gpio=4,baudrate=420000,rate_hz=50,)
+    # CRSF interface
+    crsfTxer = CrsfRcOutput(name="CRSF",use_pigpio=True,tx_gpio=4,baudrate=420000,rate_hz=50,)
 
-        # RC uplink receiver, including ack txer
-        rcRxer = RcPacketReceiver(name="RC-UP",in_port=rcRxerConfig.udp_port,ack_port=rcTxerConfig.udp_port,channel_callback=crsfTxer.set_channels_us,led=rcLed,)
+    # RC uplink receiver, including ack txer
+    rcRxer = RcPacketReceiver(name="RC-UP",in_port=rcRxerConfig.udp_port,ack_port=rcTxerConfig.udp_port,channel_callback=crsfTxer.set_channels_us,led=rcLed,rssi_getter=rcStats.get_rssi,)
 
-        # MAVLink uplink/downlink
-        mavlinkRxer = UdpToSerial(name="MAVLINK-UP",udp_port=mavlinkRxerConfig.udp_port,serial_device="/dev/serial0",baudrate=115200,led=mavlinkLed,)
-        mavlinkTxer = MavlinkSerialToUdp(name="MAVLINK-DN",serial_device="/dev/serial0",baudrate=115200,udp_port=mavlinkTxerConfig.udp_port,)
-        videoTxer = PiCamVideoToUdp(name="VIDEO",udp_port=videoTxerConfig.udp_port,width=640,height=480,framerate=2,bitrate=700000,mtu=1200,)
-    # if
-
-
-
+    # MAVLink uplink/downlink
+    mavlinkRxer = UdpToSerial(name="MAVLINK-UP",udp_port=mavlinkRxerConfig.udp_port,serial_device="/dev/serial0",baudrate=115200,led=mavlinkLed,)
+    mavlinkTxer = MavlinkSerialToUdp(name="MAVLINK-DN",serial_device="/dev/serial0",baudrate=115200,udp_port=mavlinkTxerConfig.udp_port,)
+    videoTxer = PiCamVideoToUdp(name="VIDEO",udp_port=videoTxerConfig.udp_port,width=640,height=480,framerate=2,bitrate=700000,mtu=1200,)
 
     while True:
         time.sleep(1)

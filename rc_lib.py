@@ -143,6 +143,7 @@ class RcPacketReceiver:
         in_port: int,
         ack_port: int,
         led=None,
+        rssi_getter=None,
         channel_callback=None,
         period_warn_ms: float = 250.0,
         print_every_sec: float = 1.0,
@@ -152,6 +153,7 @@ class RcPacketReceiver:
         self.in_port = in_port
         self.ack_port = ack_port
         self.led = led
+        self.rssi_getter = rssi_getter
         self.channel_callback = channel_callback
 
         self.period_warn_ms = period_warn_ms
@@ -222,8 +224,19 @@ class RcPacketReceiver:
             avg_period_ms = self.period_sum_ms / self.period_count
 
         if(True):
+            rssi_text = f"Unknown"
+            if self.rssi_getter is not None:
+                try:
+                    rssi = self.rssi_getter()
+
+                    if rssi is not None:
+                        rssi_text = f"{rssi}"
+                except Exception:
+                    pass
+
             print(
                 f"\r[{self.name}] "
+                f"rssi={rssi_text} "
                 f"rx={self.rx_count} "
                 f"lost={self.lost_count} "
                 f"avg_period={avg_period_ms:.1f} ms "
@@ -231,6 +244,7 @@ class RcPacketReceiver:
                 f"max_gap={self.max_frame_gap}",
                 flush=True,
             )
+        # if
 
         self.period_sum_ms = 0.0
         self.period_count = 0
@@ -343,6 +357,7 @@ class RcAckReceiver:
         name: str,
         port: int,
         led=None,
+        rssi_getter=None,
         latency_warn_sec: float = 0.25,
         print_every_sec: float = 1.0,
         auto_start: bool = True,
@@ -350,6 +365,7 @@ class RcAckReceiver:
         self.name = name
         self.port = port
         self.led = led
+        self.rssi_getter = rssi_getter
 
         self.latency_warn_sec = latency_warn_sec
         self.print_every_sec = print_every_sec
@@ -454,8 +470,19 @@ class RcAckReceiver:
                 self.latency_count
             )
 
+        rssi_text = f"Unknown"
+        if self.rssi_getter is not None:
+            try:
+                rssi = self.rssi_getter()
+
+                if rssi is not None:
+                    rssi_text = f"{rssi}"
+            except Exception:
+                pass
+
         print(
             f"\r[{self.name}] "
+            f"rssi={rssi_text} "
             f"rx={self.rx_count} "
             f"lost={self.lost_count} "
             f"late>{self.latency_warn_sec * 1000:.0f}ms="
