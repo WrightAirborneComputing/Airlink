@@ -10,11 +10,13 @@ from process_lib import (
 @dataclass
 class WfbConfig:
     iface: str = "wlan1"
-    channel: str = "1"
+    channel: int = 1
+    txpower_dbm: int = 20
     tx_key: str = "/etc/wfb/drone.key"
     rx_key: str = "/etc/wfb/gs.key"
-    radio_port: str = "0"
+    radio_port: int = 0
     udp_port: int = 9000
+# class
 
 class WifiRadioSetup:
     def __init__(self, config: WfbConfig):
@@ -23,15 +25,20 @@ class WifiRadioSetup:
     def run(self):
         iface = self.config.iface
         desired_channel = self.config.channel
+        desired_txpower_dbm = float(self.config.txpower_dbm)
+        desired_txpower_mbm = int(desired_txpower_dbm * 100)
 
         current_type = self._get_interface_type(iface)
         current_channel = self._get_interface_channel(iface)
         power_save = self._get_power_save(iface)
+        txpower_dbm = self._get_txpower_dbm(iface)
 
         already_ok = (
             current_type == "monitor" and
-            current_channel == desired_channel and
-            power_save == "off"
+            current_channel == str(desired_channel) and
+            power_save == "off" and
+            txpower_dbm is not None and
+            txpower_dbm >= desired_txpower_dbm - 0.5
         )
 
         if already_ok:
@@ -39,35 +46,31 @@ class WifiRadioSetup:
             print(f"\r  type       : {current_type}")
             print(f"\r  channel    : {current_channel}")
             print(f"\r  power_save : {power_save}")
+            print(f"\r  txpower    : {txpower_dbm:.1f} dBm")
             return
+        # if
 
         print(f"\r{iface} requires setup.")
 
-        self._run(
-            ["sudo", "pkill", "-f", f"wpa_supplicant.*{iface}"],
-            check=False,
-            quiet=True
-        )
-
-        self._run(
-            ["sudo", "nmcli", "dev", "set", iface, "managed", "no"],
-            check=False,
-            quiet=True
-        )
-
+        self._run(["sudo", "pkill", "-f", f"wpa_supplicant.*{iface}"],check=False,quiet=True)
+        self._run(["sudo", "nmcli", "dev", "set", iface, "managed", "no"],check=False,quiet=True)
         self._run(["sudo", "ip", "link", "set", iface, "down"])
         self._run(["sudo", "iw", "dev", iface, "set", "type", "monitor"])
         self._run(["sudo", "ip", "link", "set", iface, "up"])
-        self._run(["sudo", "iw", "dev", iface, "set", "channel", desired_channel])
-
-        self._run(
-            ["sudo", "iw", "dev", iface, "set", "power_save", "off"],
-            check=False
-        )
+        self._run(["sudo", "iw", "dev", iface, "set", "channel", str(desired_channel)])
+        self._run(["sudo", "iw", "dev", iface, "set", "txpower", "fixed", str(desired_txpower_mbm)])
+        self._run(["sudo", "iw", "dev", iface, "set", "power_save", "off"],check=False)
 
         print("\nFinal interface state:")
+
         self._run(["iw", "dev", iface, "info"])
-        self._run(["iw", "dev", iface, "get", "power_save"], check=False)
+        self._run(["iw", "dev", iface, "get", "power_save"],check=False)
+
+        txpower_dbm = self._get_txpower_dbm(iface)
+        if txpower_dbm is not None:
+            print(f"\rConfigured TX power: {txpower_dbm:.1f} dBm")
+        # if
+    # def
 
     def _run(self, args, check=True, quiet=False):
         if not quiet:
@@ -87,6 +90,7 @@ class WifiRadioSetup:
         if not quiet:
             if result.stdout:
                 print(result.stdout.strip())
+
             if result.stderr:
                 print(result.stderr.strip())
 
@@ -103,6 +107,7 @@ class WifiRadioSetup:
 
             for line in result.stdout.splitlines():
                 line = line.strip()
+
                 if line.startswith("type "):
                     return line.split()[1]
 
@@ -122,6 +127,7 @@ class WifiRadioSetup:
 
             for line in result.stdout.splitlines():
                 line = line.strip()
+
                 if line.startswith("channel "):
                     return line.split()[1]
 
@@ -149,6 +155,26 @@ class WifiRadioSetup:
             pass
 
         return None
+
+    def _get_txpower_dbm(self, iface):
+        try:
+            result = subprocess.run(
+                ["iw", "dev", iface, "info"],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+
+            for line in result.stdout.splitlines():
+                line = line.strip()
+
+                if line.startswith("txpower"):
+                    return float(line.split()[1])
+
+        except Exception:
+            pass
+
+        return None
 # class
 
 class WfbTx:
@@ -165,7 +191,7 @@ class WfbTx:
             "-k", str(self.config.rs_k),
             "-n", str(self.config.rs_n),
             "-u", str(self.config.udp_port),
-            "-p", self.config.radio_port,
+            "-p", str(self.config.radio_port),
             self.config.iface
         ], suppress_output=suppress_output)
 # class
@@ -190,7 +216,7 @@ class WfbRx:
                 "-u",
                 str(self.config.udp_port),
                 "-p",
-                self.config.radio_port,
+                str(self.config.radio_port),
                 self.config.iface,
             ],
             suppress_output=suppress_output,

@@ -38,85 +38,35 @@ from crsf_lib import (
     CrsfRcOutput,
 )
 
-
-print_banner(
-    "AIRLINK AIR",
-    udp_ports=[
-        9000,
-        9001,
-        9002,
-        9003,
-        9004,
-    ],
-    serial_ports=[
-        "/dev/serial0",
-    ],
-    gpios=[
-        "CRSF TX GPIO4",
-    ],
-    radio_ports=[
-        "0 RC-UP",
-        "1 RC-ACK",
-        "2 MAVLINK-UP",
-        "3 MAVLINK-DN",
-        "4 VIDEO-DN",
-    ],
-)
-
-
 runner = ProcessRunner()
 
-rcRxerConfig = WfbConfig(
-    iface="wlan1",
-    channel="1",
-    rx_key="/etc/wfb/drone.key",
-    udp_port=9000,
-    radio_port="0",
-)
+WIFI_IFACE = "wlan1"
+if(False):
+    WIFI_CHANNEL = 1
+    WIFI_TXPOWER_DBM = 20
+else:
+    WIFI_CHANNEL = 15
+    WIFI_TXPOWER_DBM = 30
+# if
+WIFI_KEY = "/etc/wfb/drone.key"
 
-rcTxerConfig = WfbConfig(
-    iface="wlan1",
-    channel="1",
-    tx_key="/etc/wfb/drone.key",
-    udp_port=9001,
-    radio_port="1",
-)
+rcRxerConfig      = WfbConfig(iface=WIFI_IFACE, channel=WIFI_CHANNEL, txpower_dbm=WIFI_TXPOWER_DBM, rx_key=WIFI_KEY, udp_port=9000, radio_port=0, )
+rcTxerConfig      = WfbConfig(iface=WIFI_IFACE, channel=WIFI_CHANNEL, txpower_dbm=WIFI_TXPOWER_DBM, tx_key=WIFI_KEY, udp_port=9001, radio_port=1, )
+mavlinkRxerConfig = WfbConfig(iface=WIFI_IFACE, channel=WIFI_CHANNEL, txpower_dbm=WIFI_TXPOWER_DBM, rx_key=WIFI_KEY, udp_port=9002, radio_port=2, )
+mavlinkTxerConfig = WfbConfig(iface=WIFI_IFACE, channel=WIFI_CHANNEL, txpower_dbm=WIFI_TXPOWER_DBM, tx_key=WIFI_KEY, udp_port=9003, radio_port=3, )
+videoTxerConfig   = WfbConfig(iface=WIFI_IFACE, channel=WIFI_CHANNEL, txpower_dbm=WIFI_TXPOWER_DBM, tx_key=WIFI_KEY, udp_port=9004, radio_port=4, )
 
-mavlinkRxerConfig = WfbConfig(
-    iface="wlan1",
-    channel="1",
-    rx_key="/etc/wfb/drone.key",
-    udp_port=9002,
-    radio_port="2",
-)
-
-mavlinkTxerConfig = WfbConfig(
-    iface="wlan1",
-    channel="1",
-    tx_key="/etc/wfb/drone.key",
-    udp_port=9003,
-    radio_port="3",
-)
-
-videoTxerConfig = WfbConfig(
-    iface="wlan1",
-    channel="1",
-    tx_key="/etc/wfb/drone.key",
-    udp_port=9004,
-    radio_port="4",
-)
-
-rcStats = WfbInstrumentationParser("RC-RX")
+rcStats  = WfbInstrumentationParser("RC-RX")
 mavStats = WfbInstrumentationParser("MAVLINK-RX")
 
 mavlinkLed = ActivityLed(21,timeout_sec=1.0)
-rcLed = ActivityLed(20)
+rcLed      = ActivityLed(20)
 
-rcRxer = None
-crsfTxer = None
+rcRxer      = None
+crsfTxer    = None
 mavlinkRxer = None
 mavlinkTxer = None
-videoTxer = None
+videoTxer   = None
 
 try:
     WifiRadioSetup(rcRxerConfig).run()
