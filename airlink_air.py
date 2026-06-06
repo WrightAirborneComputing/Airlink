@@ -44,9 +44,12 @@ WIFI_IFACE = "wlan1"
 if(False):
     WIFI_CHANNEL = 1
     WIFI_TXPOWER_DBM = 20
-else:
+elif(False):
     WIFI_CHANNEL = 15
     WIFI_TXPOWER_DBM = 30
+else:
+    WIFI_CHANNEL = 32
+    WIFI_TXPOWER_DBM = 23
 # if
 WIFI_KEY = "/etc/wfb/drone.key"
 
