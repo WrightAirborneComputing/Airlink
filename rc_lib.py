@@ -33,6 +33,7 @@ class RcPacketSender:
 
         if auto_start:
             self.start()
+    # def
 
     def set_channels(
         self,
@@ -51,6 +52,7 @@ class RcPacketSender:
                 max(1000, min(2000, int(v)))
                 for v in values
             ]
+    # def
 
     def start(self):
         if self.thread is not None:
@@ -62,9 +64,11 @@ class RcPacketSender:
             daemon=True,
         )
         self.thread.start()
+    # def
 
     def stop(self):
         self.running = False
+    # def
 
     def _run(self):
         print(
@@ -134,6 +138,7 @@ class RcPacketSender:
 
             if sleep_time > 0:
                 time.sleep(sleep_time)
+    # def
 
 
 class RcPacketReceiver:
@@ -143,6 +148,7 @@ class RcPacketReceiver:
         in_port: int,
         ack_port: int,
         led=None,
+        rssi_led_bar=None,
         rssi_getter=None,
         channel_callback=None,
         period_warn_ms: float = 250.0,
@@ -153,6 +159,7 @@ class RcPacketReceiver:
         self.in_port = in_port
         self.ack_port = ack_port
         self.led = led
+        self.rssi_led_bar = rssi_led_bar
         self.rssi_getter = rssi_getter
         self.channel_callback = channel_callback
 
@@ -188,6 +195,7 @@ class RcPacketReceiver:
 
         if auto_start:
             self.start()
+    # def
 
     def start(self):
         if self.thread is not None:
@@ -199,9 +207,11 @@ class RcPacketReceiver:
             daemon=True,
         )
         self.thread.start()
+    # def
 
     def stop(self):
         self.running = False
+    # def
 
     def _recv_latest(self):
         try:
@@ -210,30 +220,39 @@ class RcPacketReceiver:
             return None
         except socket.error:
             return None
+    # def
 
     def _maybe_print_summary(self):
-        now = time.time()
 
+        # Process RSSI
+        rssi_text = f"Unknown"
+        if self.rssi_getter is not None:
+            try:
+                rssi = self.rssi_getter()
+
+                if rssi is not None:
+                    rssi_text = f"{rssi}"
+            except Exception:
+                pass
+        # if
+
+        # Always refresh RSSI bar
+        if self.rssi_led_bar is not None:
+            self.rssi_led_bar.set_rssi(rssi)
+
+        # Sometimes refresh text output
+        now = time.time()
         if now - self.last_print_time < self.print_every_sec:
             return
+        # if
 
         self.last_print_time = now
-
         avg_period_ms = 0.0
         if self.period_count > 0:
             avg_period_ms = self.period_sum_ms / self.period_count
+        # if
 
         if(True):
-            rssi_text = f"Unknown"
-            if self.rssi_getter is not None:
-                try:
-                    rssi = self.rssi_getter()
-
-                    if rssi is not None:
-                        rssi_text = f"{rssi}"
-                except Exception:
-                    pass
-
             print(
                 f"\r[{self.name}] "
                 f"rssi={rssi_text} "
@@ -250,6 +269,7 @@ class RcPacketReceiver:
         self.period_count = 0
         self.max_period_ms = 0.0
         self.max_frame_gap = 0
+    # def
 
     def _run(self):
         print(
@@ -349,6 +369,8 @@ class RcPacketReceiver:
                     f"\r[{self.name}] receiver exception: {e}",
                     flush=True,
                 )
+    # def
+
 # class
 
 class RcAckReceiver:
@@ -357,6 +379,7 @@ class RcAckReceiver:
         name: str,
         port: int,
         led=None,
+        rssi_led_bar = None,
         rssi_getter=None,
         latency_warn_sec: float = 0.25,
         print_every_sec: float = 1.0,
@@ -365,6 +388,7 @@ class RcAckReceiver:
         self.name = name
         self.port = port
         self.led = led
+        self.rssi_led_bar = rssi_led_bar
         self.rssi_getter = rssi_getter
 
         self.latency_warn_sec = latency_warn_sec
@@ -393,6 +417,7 @@ class RcAckReceiver:
 
         if auto_start:
             self.start()
+    # def
 
     def start(self):
         if self.thread is not None:
@@ -404,9 +429,11 @@ class RcAckReceiver:
             daemon=True,
         )
         self.thread.start()
+    # def
 
     def stop(self):
         self.running = False
+    # def
 
     def _recv_latest(self):
         try:
@@ -454,22 +481,11 @@ class RcAckReceiver:
             )
 
         self._maybe_print_summary(now)
+    # def
 
     def _maybe_print_summary(self, now):
-        if now - self.last_print_time < self.print_every_sec:
-            return
 
-        self.last_print_time = now
-
-        total_seen = self.rx_count + self.lost_count
-
-        avg_total_ms = 0.0
-        if self.latency_count > 0:
-            avg_total_ms = (
-                self.latency_sum_ms /
-                self.latency_count
-            )
-
+        # Process RSSI
         rssi_text = f"Unknown"
         if self.rssi_getter is not None:
             try:
@@ -479,6 +495,22 @@ class RcAckReceiver:
                     rssi_text = f"{rssi}"
             except Exception:
                 pass
+            # try
+        # if
+
+        # Always refresh RSSI bar
+        if self.rssi_led_bar is not None:
+            self.rssi_led_bar.set_rssi(rssi)
+
+        # Sometimes refresh text output
+        if now - self.last_print_time < self.print_every_sec:
+            return
+
+        self.last_print_time = now
+        total_seen = self.rx_count + self.lost_count
+        avg_total_ms = 0.0
+        if self.latency_count > 0:
+            avg_total_ms = (self.latency_sum_ms /self.latency_count)
 
         print(
             f"\r[{self.name}] "
@@ -495,6 +527,7 @@ class RcAckReceiver:
         self.max_total_ms = 0.0
         self.latency_sum_ms = 0.0
         self.latency_count = 0
+    # def
 
     def _run(self):
         print(f"\r[{self.name}] ACK receiver UDP {self.port}", flush=True)
@@ -530,3 +563,5 @@ class RcAckReceiver:
 
             except Exception as e:
                 print(f"\r[{self.name}] ack exception: {e}", flush=True)
+            # try
+    # def

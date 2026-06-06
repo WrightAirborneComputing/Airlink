@@ -28,6 +28,7 @@ from rc_lib import (
 
 from led_lib import (
     ActivityLed,
+    RssiLedBar
 )
 
 from io_reader_lib import (
@@ -120,6 +121,7 @@ videoStats = WfbInstrumentationParser("VIDEO-RX")
 
 mavlinkLed = ActivityLed(21)
 rcLed = ActivityLed(20)
+rssiBar = RssiLedBar()
 
 try:
     WifiRadioSetup(rcTxerConfig).run()
@@ -133,7 +135,7 @@ try:
 
     # RC uplink and ACK receiver
     rcTxer = RcPacketSender(name="RC-UP",port=rcTxerConfig.udp_port)
-    rcRxer = RcAckReceiver(name="RC-ACK",port=rcRxerConfig.udp_port,led=rcLed,rssi_getter=rcStats.get_rssi,)
+    rcRxer = RcAckReceiver(name="RC-ACK",port=rcRxerConfig.udp_port,led=rcLed,rssi_getter=rcStats.get_rssi,rssi_led_bar=rssiBar,)
 
     # Pico joystick/switch JSON -> RC channels
     picoRcReader = PicoJsonRcReader(name="PICO-RC",serial_device="/dev/serial0",baudrate=115200,rc_sender=rcTxer,)

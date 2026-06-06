@@ -18,6 +18,7 @@ from wfb_lib import (
 
 from led_lib import (
     ActivityLed,
+    RssiLedBar
 )
 
 from udp_lib import (
