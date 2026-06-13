@@ -293,13 +293,12 @@ class RcPacketReceiver:
 
                 self.period_sum_ms += period_ms
                 self.period_count += 1
-                self.max_period_ms = max(
-                    self.max_period_ms,
-                    period_ms,
-                )
+                self.max_period_ms = max(self.max_period_ms,period_ms,)
 
                 if period_ms > self.period_warn_ms:
                     self.late_count += 1
+                # if
+            # if
 
             self.last_rx_time = rx_time
 
@@ -314,6 +313,7 @@ class RcPacketReceiver:
                         flush=True,
                     )
                     continue
+                # if
 
                 frame_count = int(fields[0])
                 tx_time = float(fields[1])
@@ -321,20 +321,22 @@ class RcPacketReceiver:
 
                 if self.last_frame is not None:
                     frame_gap = frame_count - self.last_frame
-                    self.max_frame_gap = max(
-                        self.max_frame_gap,
-                        frame_gap,
-                    )
+                    self.max_frame_gap = max(self.max_frame_gap,frame_gap,)
 
                     expected = self.last_frame + 1
+                    lost = frame_count - expected
 
-                    if frame_count > expected:
-                        self.lost_count += frame_count - expected
+                    if lost > 0:
+                        print(f"\rLost [{lost}]")
+                        self.lost_count += lost
 
                     elif frame_count <= self.last_frame:
-                        continue
+                        print(f"\rBad frame count [{frame_count}/{self.last_frame}]")
+                        self.last_frame = frame_count
+                    # if
                 else:
                     self.max_frame_gap = max(self.max_frame_gap, 1)
+                # if
 
                 self.last_frame = frame_count
                 self.rx_count += 1
@@ -344,31 +346,23 @@ class RcPacketReceiver:
 
                 if self.led is not None:
                     self.led.activity()
+                # if
 
                 if self.channel_callback is not None:
                     try:
                         self.channel_callback(*self.channels)
                     except Exception as e:
-                        print(
-                            f"\r[{self.name}] "
-                            f"channel_callback exception: {e}",
-                            flush=True,
-                        )
+                        print(f"\r[{self.name}] "f"channel_callback exception: {e}",flush=True,)
+                    # try
+                # if
 
-                if True:
-                    ack = f"{frame_count} {tx_time:.6f} {rx_time:.6f}"
-                    self.ack_sock.sendto(
-                        ack.encode("ascii"),
-                        ("127.0.0.1", self.ack_port),
-                    )
+                ack = f"{frame_count} {tx_time:.6f} {rx_time:.6f}"
+                self.ack_sock.sendto(ack.encode("ascii"),("127.0.0.1", self.ack_port),)
 
                 self._maybe_print_summary()
 
             except Exception as e:
-                print(
-                    f"\r[{self.name}] receiver exception: {e}",
-                    flush=True,
-                )
+                print(f"\r[{self.name}] receiver exception: {e}",flush=True,)
     # def
 
 # class
@@ -417,11 +411,13 @@ class RcAckReceiver:
 
         if auto_start:
             self.start()
+        # if
     # def
 
     def start(self):
         if self.thread is not None:
             return
+        # if
 
         self.running = True
         self.thread = threading.Thread(
@@ -447,12 +443,16 @@ class RcAckReceiver:
     def _handle_ack(self, frame_count, tx_time, now):
         if self.last_frame is not None:
             expected = self.last_frame + 1
+            lost = frame_count - expected
 
-            if frame_count > expected:
-                self.lost_count += frame_count - expected
-
+            if lost > 0:
+                print(f"\rLost [{lost}]")
+                self.lost_count += lost
             elif frame_count <= self.last_frame:
-                return
+                print(f"\nWarning! Bad frame count [{frame_count}/{self.last_frame}]")
+                self.last_frame = frame_count
+            # if
+        # if
 
         self.last_frame = frame_count
         self.rx_count += 1
@@ -460,25 +460,17 @@ class RcAckReceiver:
 
         if self.led is not None:
             self.led.activity()
+        # if
 
         total_ms = (now - tx_time) * 1000.0
-
-        self.max_total_ms = max(
-            self.max_total_ms,
-            total_ms,
-        )
-
+        self.max_total_ms = max(self.max_total_ms,total_ms,)
         self.latency_sum_ms += total_ms
         self.latency_count += 1
 
         if total_ms > self.latency_warn_sec * 1000.0:
             self.late_count += 1
-
-            print(
-                f"\r[{self.name}] LATE frame={frame_count} "
-                f"total={total_ms:.1f} ms",
-                flush=True,
-            )
+            print(f"\r[{self.name}] LATE frame={frame_count} "f"total={total_ms:.1f} ms",flush=True,)
+        # if
 
         self._maybe_print_summary(now)
     # def
@@ -501,16 +493,19 @@ class RcAckReceiver:
         # Always refresh RSSI bar
         if self.rssi_led_bar is not None:
             self.rssi_led_bar.set_rssi(rssi)
+        # if
 
         # Sometimes refresh text output
         if now - self.last_print_time < self.print_every_sec:
             return
+        # if
 
         self.last_print_time = now
         total_seen = self.rx_count + self.lost_count
         avg_total_ms = 0.0
         if self.latency_count > 0:
             avg_total_ms = (self.latency_sum_ms /self.latency_count)
+        # if
 
         print(
             f"\r[{self.name}] "
@@ -542,6 +537,7 @@ class RcAckReceiver:
 
                 time.sleep(0.001)
                 continue
+            # if
 
             data, _ = latest
 
@@ -564,4 +560,5 @@ class RcAckReceiver:
             except Exception as e:
                 print(f"\r[{self.name}] ack exception: {e}", flush=True)
             # try
+        # while
     # def
