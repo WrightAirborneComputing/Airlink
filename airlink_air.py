@@ -90,7 +90,7 @@ try:
     # MAVLink uplink/downlink
     mavlinkRxer = UdpToSerial(name="MAVLINK-UP",udp_port=mavlinkRxerConfig.udp_port,serial_device="/dev/serial0",baudrate=115200,led=mavlinkLed,)
     mavlinkTxer = MavlinkSerialToUdp(name="MAVLINK-DN",serial_device="/dev/serial0",baudrate=115200,udp_port=mavlinkTxerConfig.udp_port,)
-    videoTxer = PiCamVideoToUdp(name="VIDEO",udp_port=videoTxerConfig.udp_port,width=640,height=480,framerate=2,bitrate=700000,mtu=1200,)
+    videoTxer = PiCamVideoToUdp(name="VIDEO",udp_port=videoTxerConfig.udp_port,width=320,height=240,framerate=2,bitrate=700000,mtu=1200,)
 
     while True:
         time.sleep(1)
