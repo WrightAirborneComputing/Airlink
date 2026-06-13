@@ -36,7 +36,7 @@ class PiCamVideoToUdp:
 
         cmd = (
             f"rpicam-vid -t 0 --nopreview --low-latency "
-            f"--codec h264 --inline "
+            f"--codec h264 --intra 1 --inline "
             f"--width {self.width} --height {self.height} "
             f"--framerate {self.framerate} "
             f"--bitrate {self.bitrate} "
