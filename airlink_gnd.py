@@ -45,8 +45,8 @@ WIFI_IFACE = "wlan1"
 if(False):
     WIFI_CHANNEL = 1
     WIFI_TXPOWER_DBM = 20
-elif(False):
-    WIFI_CHANNEL = 15
+elif(True):
+    WIFI_CHANNEL = 17
     WIFI_TXPOWER_DBM = 30
 else:
     WIFI_CHANNEL = 32
