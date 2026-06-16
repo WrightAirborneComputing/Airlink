@@ -270,11 +270,11 @@ class PicoJsonRcReader:
         ch3 = self._axis_to_us("throttle", p.get("p2_a1_v", 0.0))
         ch4 = self._axis_to_us("yaw", p.get("p2_a0_v", 0.0))
 
-        ch5 = self._sw2_to_us(p.get("p2_sw3", 0))
+        ch5 = self._sw2_to_us(p.get("p1_sw2", 0))
         ch6 = self._sw3_to_us(p.get("p2_sw1", 0))
         ch7 = self._sw3_to_us(p.get("p1_sw1", 0))
         ch8 = self._sw2_to_us(p.get("p2_sw2", 0))
-        ch9 = self._sw2_to_us(p.get("p1_sw2", 0))
+        ch9 = self._sw2_to_us(p.get("p2_sw3", 0))
         ch10 = self._sw2_to_us(p.get("p1_sw3", 0))
         ch11 = 1000
         ch12 = 1000
