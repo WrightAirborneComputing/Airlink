@@ -30,13 +30,11 @@ from rc_lib import (
     RcPacketReceiver,
 )
 
-from video_lib import (
-    PiCamVideoToUdp,
-)
+from video_lib import PiCamVideoToUdp
 
-from crsf_lib import (
-    CrsfRcOutput,
-)
+from crsf_lib import CrsfRcOutput
+from sbus_lib import SbusRcOutput
+
 
 runner = ProcessRunner()
 
@@ -66,7 +64,7 @@ mavlinkLed = ActivityLed(21,timeout_sec=1.0)
 rcLed      = ActivityLed(20)
 
 rcRxer      = None
-crsfTxer    = None
+rcSerialTxer    = None
 mavlinkRxer = None
 mavlinkTxer = None
 videoTxer   = None
@@ -82,10 +80,14 @@ try:
     WfbTx(videoTxerConfig, runner).start()
     
     # CRSF interface
-    crsfTxer = CrsfRcOutput(name="CRSF",use_pigpio=True,tx_gpio=4,baudrate=420000,rate_hz=50,)
+    if(True):
+        rcSerialTxer = CrsfRcOutput(name="CRSF",use_pigpio=True,tx_gpio=4,baudrate=420000,rate_hz=50,)
+    else:
+        rcSerialTxer = SbusRcOutput(name="SBUS",use_pigpio=True,tx_gpio=4,rate_hz=50,)
+    # if
 
     # RC uplink receiver, including ack txer
-    rcRxer = RcPacketReceiver(name="RC-UP",in_port=rcRxerConfig.udp_port,ack_port=rcTxerConfig.udp_port,channel_callback=crsfTxer.set_channels_us,led=rcLed,rssi_getter=rcStats.get_rssi,)
+    rcRxer = RcPacketReceiver(name="RC-UP",in_port=rcRxerConfig.udp_port,ack_port=rcTxerConfig.udp_port,channel_callback=rcSerialTxer.set_channels_us,led=rcLed,rssi_getter=rcStats.get_rssi,)
 
     # MAVLink uplink/downlink
     mavlinkRxer = UdpToSerial(name="MAVLINK-UP",udp_port=mavlinkRxerConfig.udp_port,serial_device="/dev/serial0",baudrate=115200,led=mavlinkLed,)
@@ -102,8 +104,8 @@ finally:
     if rcRxer is not None:
         rcRxer.stop()
 
-    if crsfTxer is not None:
-        crsfTxer.close()
+    if rcSerialTxer is not None:
+        rcSerialTxer.close()
 
     if mavlinkRxer is not None:
         mavlinkRxer.stop()
