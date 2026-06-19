@@ -19,7 +19,8 @@ class SerialByteOutput:
 
     def close(self):
         self.ser.close()
-
+    # def
+# class
 
 class PigpioSerialByteOutput:
     def __init__(self, tx_gpio=4, baudrate=420000):
@@ -44,6 +45,7 @@ class PigpioSerialByteOutput:
 
         self.pi.set_mode(self.tx_gpio, pigpio.OUTPUT)
         self.pi.write(self.tx_gpio, 1)
+    # def
 
     def write(self, data: bytes):
         self.pi.wave_clear()
@@ -65,11 +67,13 @@ class PigpioSerialByteOutput:
             time.sleep(0.0005)
 
         self.pi.wave_delete(wave_id)
+    # def
 
     def close(self):
         self.pi.wave_clear()
         self.pi.write(self.tx_gpio, 1)
         self.pi.stop()
+    # def
 
 
 class CrsfRcOutput:
@@ -88,6 +92,7 @@ class CrsfRcOutput:
     ):
         self.name = name
         self.rate_hz = rate_hz
+        self.enabled = False
 
         if use_pigpio:
             self.output = PigpioSerialByteOutput(
@@ -117,10 +122,12 @@ class CrsfRcOutput:
 
         if auto_start:
             self.start()
+    # def
 
     def close(self):
         self.stop()
         self.output.close()
+    # def
 
     @staticmethod
     def _crc8_dvb_s2(data: bytes) -> int:
@@ -136,6 +143,7 @@ class CrsfRcOutput:
                     crc = (crc << 1) & 0xFF
 
         return crc
+    # def
 
     @staticmethod
     def us_to_crsf(us: int) -> int:
@@ -149,6 +157,7 @@ class CrsfRcOutput:
                 + 992
             )
         )
+    # def
 
     def set_channels_us(self,ch1,ch2,ch3,ch4,ch5,ch6,ch7,ch8,ch9,ch10,ch11,ch12):
         values = [ch1,ch2,ch3,ch4,ch5,ch6,ch7,ch8,ch9,ch10,ch11,ch12]
@@ -182,6 +191,7 @@ class CrsfRcOutput:
             value |= (ch & 0x7FF) << (11 * i)
 
         return value.to_bytes(22, byteorder="little")
+    # def
 
     def make_frame(self) -> bytes:
         payload = self._pack_channels()
@@ -198,9 +208,36 @@ class CrsfRcOutput:
         ]) + frame_type_and_payload + bytes([crc])
 
         return frame
+    # def
+
+    def set_enabled(self, enabled: bool):
+        with self.lock:
+            was_enabled = self.enabled
+            self.enabled = bool(enabled)
+
+        if self.enabled and not was_enabled:
+            print(f"\r[{self.name}] serial ENABLED", flush=True)
+
+        elif not self.enabled and was_enabled:
+            print(f"\r[{self.name}] serial DISABLED", flush=True)
+    # def
+
+    def enable(self):
+        self.set_enabled(True)
+    # def
+
+    def disable(self):
+        self.set_enabled(False)
+    # def
+
+    def is_enabled(self):
+        with self.lock:
+            return self.enabled
+    # def
 
     def send(self):
         self.output.write(self.make_frame())
+    # def
 
     def start(self):
         if self.thread is not None:
@@ -219,6 +256,7 @@ class CrsfRcOutput:
             f"\r[{self.name}] started at {self.rate_hz} Hz",
             flush=True,
         )
+    # def
 
     def stop(self):
         self.running = False
@@ -226,10 +264,15 @@ class CrsfRcOutput:
         if self.thread is not None:
             self.thread.join(timeout=1.0)
             self.thread = None
+    # def
 
     def _run(self):
         delay = 1.0 / self.rate_hz
 
         while self.running:
-            self.send()
+            if self.is_enabled():
+                self.send()
             time.sleep(delay)
+        # while
+    # def
+# class

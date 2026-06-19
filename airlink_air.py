@@ -79,7 +79,7 @@ try:
     WfbTx(mavlinkTxerConfig, runner).start()
     WfbTx(videoTxerConfig, runner).start()
     
-    # CRSF interface
+    # CRSF/S-Bus interface
     if(True):
         rcSerialTxer = CrsfRcOutput(name="CRSF",use_pigpio=True,tx_gpio=4,baudrate=420000,rate_hz=50,)
     else:
@@ -87,7 +87,9 @@ try:
     # if
 
     # RC uplink receiver, including ack txer
-    rcRxer = RcPacketReceiver(name="RC-UP",in_port=rcRxerConfig.udp_port,ack_port=rcTxerConfig.udp_port,channel_callback=rcSerialTxer.set_channels_us,led=rcLed,rssi_getter=rcStats.get_rssi,)
+    rcRxer = RcPacketReceiver(name="RC-UP",in_port=rcRxerConfig.udp_port,ack_port=rcTxerConfig.udp_port,
+                              channel_callback=crsfTxer.set_channels_us,led=rcLed,rssi_getter=rcStats.get_rssi,
+                              rc_timeout_sec=1.0,rc_active_callback=rcSerialTxer.set_enabled,)
 
     # MAVLink uplink/downlink
     mavlinkRxer = UdpToSerial(name="MAVLINK-UP",udp_port=mavlinkRxerConfig.udp_port,serial_device="/dev/serial0",baudrate=115200,led=mavlinkLed,)

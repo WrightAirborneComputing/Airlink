@@ -33,6 +33,7 @@ class RcPacketSender:
 
         if auto_start:
             self.start()
+        # if
     # def
 
     def set_channels(
@@ -57,6 +58,7 @@ class RcPacketSender:
     def start(self):
         if self.thread is not None:
             return
+        # if
 
         self.running = True
         self.thread = threading.Thread(
@@ -92,13 +94,13 @@ class RcPacketSender:
                 period_sum_ms += period_ms
                 period_count += 1
                 max_period_ms = max(max_period_ms, period_ms)
+            # if
 
             last_send_time = now
-
             tx_time = now
-
             with self.lock:
                 channels = list(self.channels)
+            # with
 
             payload = (
                 f"{self.frame_count} "
@@ -106,11 +108,7 @@ class RcPacketSender:
                 + " ".join(str(v) for v in channels)
             )
 
-            self.sock.sendto(
-                payload.encode("ascii"),
-                ("127.0.0.1", self.port),
-            )
-
+            self.sock.sendto(payload.encode("ascii"),("127.0.0.1", self.port),)
             self.frame_count += 1
 
             if now - last_print_time >= 1.0:
@@ -128,16 +126,19 @@ class RcPacketSender:
                         f"max_period={max_period_ms:.1f} ms",
                         flush=True,
                     )
+                # if
 
                 last_print_time = now
                 period_sum_ms = 0.0
                 period_count = 0
                 max_period_ms = 0.0
+            # if
 
             sleep_time = self.interval_sec - (time.time() - now)
-
             if sleep_time > 0:
                 time.sleep(sleep_time)
+            # if
+        # while
     # def
 
 
@@ -151,6 +152,8 @@ class RcPacketReceiver:
         rssi_led_bar=None,
         rssi_getter=None,
         channel_callback=None,
+        rc_active_callback=None,
+        rc_timeout_sec: float = 0.5,
         period_warn_ms: float = 250.0,
         print_every_sec: float = 1.0,
         auto_start: bool = True,
@@ -162,12 +165,17 @@ class RcPacketReceiver:
         self.rssi_led_bar = rssi_led_bar
         self.rssi_getter = rssi_getter
         self.channel_callback = channel_callback
+        self.rc_active_callback = rc_active_callback
 
+        self.rc_timeout_sec = rc_timeout_sec
         self.period_warn_ms = period_warn_ms
         self.print_every_sec = print_every_sec
 
         self.running = False
         self.thread = None
+
+        self.rc_active = False
+        self.last_packet_time = time.time()
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4096)
@@ -188,13 +196,13 @@ class RcPacketReceiver:
         self.period_sum_ms = 0.0
         self.period_count = 0
         self.max_period_ms = 0.0
-
         self.max_frame_gap = 0
 
         self.last_print_time = time.time()
 
         if auto_start:
             self.start()
+        # if
     # def
 
     def start(self):
@@ -211,6 +219,26 @@ class RcPacketReceiver:
 
     def stop(self):
         self.running = False
+        self._set_rc_active(False)
+    # def
+
+    def _set_rc_active(self, active: bool):
+        if self.rc_active == active:
+            return
+
+        self.rc_active = active
+
+        state = "ACTIVE" if active else "TIMEOUT"
+        print(f"\r[{self.name}] RC {state}", flush=True)
+
+        if self.rc_active_callback is not None:
+            try:
+                self.rc_active_callback(active)
+            except Exception as e:
+                print(
+                    f"\r[{self.name}] rc_active_callback exception: {e}",
+                    flush=True,
+                )
     # def
 
     def _recv_latest(self):
@@ -223,47 +251,41 @@ class RcPacketReceiver:
     # def
 
     def _maybe_print_summary(self):
+        rssi = None
+        rssi_text = "Unknown"
 
-        # Process RSSI
-        rssi_text = f"Unknown"
         if self.rssi_getter is not None:
             try:
                 rssi = self.rssi_getter()
-
                 if rssi is not None:
                     rssi_text = f"{rssi}"
             except Exception:
                 pass
-        # if
 
-        # Always refresh RSSI bar
         if self.rssi_led_bar is not None:
             self.rssi_led_bar.set_rssi(rssi)
 
-        # Sometimes refresh text output
         now = time.time()
         if now - self.last_print_time < self.print_every_sec:
             return
-        # if
 
         self.last_print_time = now
+
         avg_period_ms = 0.0
         if self.period_count > 0:
             avg_period_ms = self.period_sum_ms / self.period_count
-        # if
 
-        if(True):
-            print(
-                f"\r[{self.name}] "
-                f"rssi={rssi_text} "
-                f"rx={self.rx_count} "
-                f"lost={self.lost_count} "
-                f"avg_period={avg_period_ms:.1f} ms "
-                f"max_period={self.max_period_ms:.1f} ms "
-                f"max_gap={self.max_frame_gap}",
-                flush=True,
-            )
-        # if
+        print(
+            f"\r[{self.name}] "
+            f"rssi={rssi_text} "
+            f"active={self.rc_active} "
+            f"rx={self.rx_count} "
+            f"lost={self.lost_count} "
+            f"avg_period={avg_period_ms:.1f} ms "
+            f"max_period={self.max_period_ms:.1f} ms "
+            f"max_gap={self.max_frame_gap}",
+            flush=True,
+        )
 
         self.period_sum_ms = 0.0
         self.period_count = 0
@@ -281,6 +303,9 @@ class RcPacketReceiver:
             latest = self._recv_latest()
 
             if latest is None:
+                if time.time() - self.last_packet_time > self.rc_timeout_sec:
+                    self._set_rc_active(False)
+
                 self._maybe_print_summary()
                 time.sleep(0.001)
                 continue
@@ -290,15 +315,12 @@ class RcPacketReceiver:
 
             if self.last_rx_time is not None:
                 period_ms = (rx_time - self.last_rx_time) * 1000.0
-
                 self.period_sum_ms += period_ms
                 self.period_count += 1
-                self.max_period_ms = max(self.max_period_ms,period_ms,)
+                self.max_period_ms = max(self.max_period_ms, period_ms)
 
                 if period_ms > self.period_warn_ms:
                     self.late_count += 1
-                # if
-            # if
 
             self.last_rx_time = rx_time
 
@@ -313,7 +335,6 @@ class RcPacketReceiver:
                         flush=True,
                     )
                     continue
-                # if
 
                 frame_count = int(fields[0])
                 tx_time = float(fields[1])
@@ -321,7 +342,7 @@ class RcPacketReceiver:
 
                 if self.last_frame is not None:
                     frame_gap = frame_count - self.last_frame
-                    self.max_frame_gap = max(self.max_frame_gap,frame_gap,)
+                    self.max_frame_gap = max(self.max_frame_gap, frame_gap)
 
                     expected = self.last_frame + 1
                     lost = frame_count - expected
@@ -331,38 +352,48 @@ class RcPacketReceiver:
                         self.lost_count += lost
 
                     elif frame_count <= self.last_frame:
-                        print(f"\rBad frame count [{frame_count}/{self.last_frame}]")
+                        print(
+                            f"\rBad frame count "
+                            f"[{frame_count}/{self.last_frame}]"
+                        )
                         self.last_frame = frame_count
-                    # if
                 else:
                     self.max_frame_gap = max(self.max_frame_gap, 1)
-                # if
 
                 self.last_frame = frame_count
                 self.rx_count += 1
-
                 self.frame_count = frame_count
                 self.channels = channels
 
+                self.last_packet_time = rx_time
+                self._set_rc_active(True)
+
                 if self.led is not None:
                     self.led.activity()
-                # if
 
                 if self.channel_callback is not None:
                     try:
                         self.channel_callback(*self.channels)
                     except Exception as e:
-                        print(f"\r[{self.name}] "f"channel_callback exception: {e}",flush=True,)
-                    # try
-                # if
+                        print(
+                            f"\r[{self.name}] "
+                            f"channel_callback exception: {e}",
+                            flush=True,
+                        )
 
                 ack = f"{frame_count} {tx_time:.6f} {rx_time:.6f}"
-                self.ack_sock.sendto(ack.encode("ascii"),("127.0.0.1", self.ack_port),)
+                self.ack_sock.sendto(
+                    ack.encode("ascii"),
+                    ("127.0.0.1", self.ack_port),
+                )
 
                 self._maybe_print_summary()
 
             except Exception as e:
-                print(f"\r[{self.name}] receiver exception: {e}",flush=True,)
+                print(
+                    f"\r[{self.name}] receiver exception: {e}",
+                    flush=True,
+                )
     # def
 
 # class

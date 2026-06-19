@@ -4,7 +4,6 @@ import time
 import threading
 import subprocess
 
-
 class PigpioSbusOutput:
     def __init__(
         self,
@@ -37,12 +36,14 @@ class PigpioSbusOutput:
 
         # SBUS is inverted UART, so physical idle is low.
         self.pi.write(self.tx_gpio, 0 if self.inverted else 1)
+    # def
 
     def _physical_level(self, logical_bit):
         if self.inverted:
             return 0 if logical_bit else 1
         else:
             return 1 if logical_bit else 0
+    # def
 
     def _add_level_pulse(self, pulses, level, duration_us):
         mask = 1 << self.tx_gpio
@@ -55,6 +56,7 @@ class PigpioSbusOutput:
             pulses.append(
                 self.pigpio.pulse(0, mask, duration_us)
             )
+    # def
 
     def _byte_to_bits_8e2(self, value):
         bits = []
@@ -81,6 +83,7 @@ class PigpioSbusOutput:
         bits.append(1)
 
         return bits
+    # def
 
     def write(self, data: bytes):
         pulses = []
@@ -132,11 +135,13 @@ class PigpioSbusOutput:
             time.sleep(0.0005)
 
         self.pi.wave_delete(wave_id)
+    # def
 
     def close(self):
         self.pi.wave_clear()
         self.pi.write(self.tx_gpio, 0 if self.inverted else 1)
         self.pi.stop()
+    # def
 
 
 class SbusRcOutput:
@@ -155,6 +160,7 @@ class SbusRcOutput:
     ):
         self.name = name
         self.rate_hz = rate_hz
+        self.enabled = False
 
         if not use_pigpio:
             raise RuntimeError(
@@ -184,10 +190,12 @@ class SbusRcOutput:
 
         if auto_start:
             self.start()
+    # def
 
     def close(self):
         self.stop()
         self.output.close()
+    # def
 
     @staticmethod
     def us_to_sbus(us: int) -> int:
@@ -201,6 +209,7 @@ class SbusRcOutput:
                 + 992
             )
         )
+    # def
 
     def set_channels_us(
         self,
@@ -219,6 +228,7 @@ class SbusRcOutput:
                 self.channels[i] = self.us_to_sbus(us)
 
             self.update_count += 1
+    # def
 
     def set_channels_sbus(self, ch1_to_ch12):
         if len(ch1_to_ch12) != 12:
@@ -229,6 +239,7 @@ class SbusRcOutput:
                 self.channels[i] = max(172, min(1811, int(value)))
 
             self.update_count += 1
+    # def
 
     def _pack_channels(self):
         with self.lock:
@@ -240,6 +251,7 @@ class SbusRcOutput:
             value |= (ch & 0x07FF) << (11 * i)
 
         return value.to_bytes(22, byteorder="little")
+    # def
 
     def make_frame(self) -> bytes:
         payload = self._pack_channels()
@@ -252,9 +264,36 @@ class SbusRcOutput:
         frame += bytes([self.SBUS_END_BYTE])
 
         return frame
+    # def
+
+    def set_enabled(self, enabled: bool):
+        with self.lock:
+            was_enabled = self.enabled
+            self.enabled = bool(enabled)
+
+        if self.enabled and not was_enabled:
+            print(f"\r[{self.name}] serial ENABLED", flush=True)
+        elif not self.enabled and was_enabled:
+            print(f"\r[{self.name}] serial DISABLED", flush=True)
+        # if
+    # def
+
+    def enable(self):
+        self.set_enabled(True)
+    # def
+
+    def disable(self):
+        self.set_enabled(False)
+    # def
+
+    def is_enabled(self):
+        with self.lock:
+            return self.enabled
+    # def
 
     def send(self):
         self.output.write(self.make_frame())
+    # def
 
     def start(self):
         if self.thread is not None:
@@ -273,6 +312,7 @@ class SbusRcOutput:
             f"\r[{self.name}] started at {self.rate_hz} Hz",
             flush=True,
         )
+    # def
 
     def stop(self):
         self.running = False
@@ -280,10 +320,14 @@ class SbusRcOutput:
         if self.thread is not None:
             self.thread.join(timeout=1.0)
             self.thread = None
+    # def
 
     def _run(self):
         delay = 1.0 / self.rate_hz
 
         while self.running:
-            self.send()
+            if self.is_enabled():
+                self.send()
+
             time.sleep(delay)
+    # def
