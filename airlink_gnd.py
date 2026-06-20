@@ -21,7 +21,6 @@ from led_lib import ActivityLed, RssiLedBar
 from io_reader_lib import PicoJsonRcReader
 from video_lib import UdpRtpH264VideoDisplay
 
-
 runner = ProcessRunner()
 stop_event = threading.Event()
 
@@ -38,7 +37,6 @@ videoRxer = None
 mavlinkLed = None
 rcLed = None
 rssiBar = None
-
 
 def cleanup():
     global rcTxer, rcRxer, picoRcReader, mavlinkGateway, videoRxer

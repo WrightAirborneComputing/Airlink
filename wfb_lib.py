@@ -241,10 +241,16 @@ class WfbInstrumentationParser:
         self.last_pkt = None
         self.last_tx = None
 
+        self.last_update_time = 0
         self.rssi = None
+    # def
 
     def get_rssi(self):
+        if time.time() - self.last_update_time > 1.0:
+            return None
+        # if
         return self.rssi
+    # def
 
     def handle_line(self, line):
         line = line.strip()
@@ -268,6 +274,7 @@ class WfbInstrumentationParser:
                 if len(values) > 0:
                     # Use the strongest/least-negative value as the single RSSI.
                     self.rssi = max(values)
+                    self.last_update_time = time.time()
 
         elif kind == "TX_ANT":
             self.last_tx = line
@@ -277,6 +284,7 @@ class WfbInstrumentationParser:
 
         if self.enable_print:
             self._maybe_print()
+    # def
 
     def _parse_rx_ant(self, timestamp, parts):
         result = {

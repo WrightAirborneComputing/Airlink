@@ -62,6 +62,7 @@ class RssiLedBar:
         self.leds = [LED(pin) for pin in gpio_pins]
         self.min_db = min_db
         self.max_db = max_db
+    # def
 
     def set_rssi(self, rssi):
         if rssi is None:
@@ -70,6 +71,7 @@ class RssiLedBar:
             rssi = max(self.min_db, min(self.max_db, float(rssi)))
             fraction = (rssi - self.min_db) / (self.max_db - self.min_db)
             level = int(round(fraction * len(self.leds)))
+        # if
 
         # bottom LEDs light first, top LED lights last
         for i, led in enumerate(self.leds):
@@ -79,10 +81,15 @@ class RssiLedBar:
                 led.on()
             else:
                 led.off()
+            # if
+        # for
+    # def
 
     def off(self):
         for led in self.leds:
             led.off()
+    # def
 
     def stop(self):
         self.off()# class
+    # def
