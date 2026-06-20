@@ -367,18 +367,18 @@ class RcPacketReceiver:
                     lost = frame_count - expected
 
                     if lost > 0:
-                        print(f"\rLost [{lost}]")
+                        # print(f"\rLost [{lost}]")
                         self.lost_count += lost
-
                     elif frame_count <= self.last_frame:
                         print(
                             f"\rBad frame count "
                             f"[{frame_count}/{self.last_frame}]"
                         )
                         self.last_frame = frame_count
+                    # if
                 else:
                     self.max_frame_gap = max(self.max_frame_gap, 1)
-
+                # if
                 self.last_frame = frame_count
                 self.rx_count += 1
                 self.frame_count = frame_count
@@ -389,6 +389,7 @@ class RcPacketReceiver:
 
                 if self.led is not None:
                     self.led.activity()
+                # if
 
                 if self.channel_callback is not None:
                     try:
@@ -399,13 +400,10 @@ class RcPacketReceiver:
                             f"channel_callback exception: {e}",
                             flush=True,
                         )
+                # if
 
                 ack = f"{frame_count} {tx_time:.6f} {rx_time:.6f}"
-                self.ack_sock.sendto(
-                    ack.encode("ascii"),
-                    ("127.0.0.1", self.ack_port),
-                )
-
+                self.ack_sock.sendto(ack.encode("ascii"),("127.0.0.1", self.ack_port),)
                 self._maybe_print_summary()
 
             except Exception as e:
@@ -413,6 +411,7 @@ class RcPacketReceiver:
                     f"\r[{self.name}] receiver exception: {e}",
                     flush=True,
                 )
+            # try
     # def
 
 # class
@@ -496,7 +495,7 @@ class RcAckReceiver:
             lost = frame_count - expected
 
             if lost > 0:
-                print(f"\rLost [{lost}]")
+                # print(f"\rLost [{lost}]")
                 self.lost_count += lost
             elif frame_count <= self.last_frame:
                 print(f"\nWarning! Bad frame count [{frame_count}/{self.last_frame}]")
