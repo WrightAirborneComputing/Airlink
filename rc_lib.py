@@ -4,7 +4,6 @@ import socket
 import threading
 import time
 
-
 class RcPacketSender:
     def __init__(
         self,
@@ -16,6 +15,7 @@ class RcPacketSender:
         self.name = name
         self.port = port
         self.interval_sec = interval_sec
+        self.enabled = True
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
@@ -53,6 +53,19 @@ class RcPacketSender:
                 max(1000, min(2000, int(v)))
                 for v in values
             ]
+    # def
+
+    def set_enabled(self, enabled: bool):
+        enabled = bool(enabled)
+        if enabled != self.enabled:
+            self.enabled = enabled
+            state = "ENABLED" if enabled else "DISABLED"
+            print(f"\r[{self.name}] TX {state}",flush=True,)
+        # if
+    # def
+
+    def is_enabled(self):
+        return self.enabled
     # def
 
     def start(self):
@@ -98,8 +111,10 @@ class RcPacketSender:
 
             last_send_time = now
             tx_time = now
+            tx_enabled = True
             with self.lock:
                 channels = list(self.channels)
+                tx_enabled = channels[8] > 1500 # i.e. Channel-9
             # with
 
             payload = (
@@ -108,30 +123,34 @@ class RcPacketSender:
                 + " ".join(str(v) for v in channels)
             )
 
-            self.sock.sendto(payload.encode("ascii"),("127.0.0.1", self.port),)
-            self.frame_count += 1
+            # Check if TX is enabled by switch
+            self.set_enabled(tx_enabled)
+            if self.enabled:
+                self.sock.sendto(payload.encode("ascii"),("127.0.0.1", self.port),)
+                self.frame_count += 1
 
-            if now - last_print_time >= 1.0:
-                avg_period_ms = (
-                    period_sum_ms / period_count
-                    if period_count > 0
-                    else 0.0
-                )
-
-                if(False):
-                    print(
-                        f"\r[{self.name}] "
-                        f"tx={self.frame_count} "
-                        f"avg_period={avg_period_ms:.1f} ms "
-                        f"max_period={max_period_ms:.1f} ms",
-                        flush=True,
+                if now - last_print_time >= 1.0:
+                    avg_period_ms = (
+                        period_sum_ms / period_count
+                        if period_count > 0
+                        else 0.0
                     )
-                # if
 
-                last_print_time = now
-                period_sum_ms = 0.0
-                period_count = 0
-                max_period_ms = 0.0
+                    if(False):
+                        print(
+                            f"\r[{self.name}] "
+                            f"tx={self.frame_count} "
+                            f"avg_period={avg_period_ms:.1f} ms "
+                            f"max_period={max_period_ms:.1f} ms",
+                            flush=True,
+                        )
+                    # if
+
+                    last_print_time = now
+                    period_sum_ms = 0.0
+                    period_count = 0
+                    max_period_ms = 0.0
+                # if
             # if
 
             sleep_time = self.interval_sec - (time.time() - now)
