@@ -88,7 +88,7 @@ try:
 
     # RC uplink receiver, including ack txer
     rcRxer = RcPacketReceiver(name="RC-UP",in_port=rcRxerConfig.udp_port,ack_port=rcTxerConfig.udp_port,
-                              channel_callback=crsfTxer.set_channels_us,led=rcLed,rssi_getter=rcStats.get_rssi,
+                              channel_callback=rcSerialTxer.set_channels_us,led=rcLed,rssi_getter=rcStats.get_rssi,
                               rc_timeout_sec=1.0,rc_active_callback=rcSerialTxer.set_enabled,)
 
     # MAVLink uplink/downlink
