@@ -18,7 +18,7 @@ from wfb_lib import (
 from led_lib import ActivityLed
 from udp_lib import MavlinkSerialToUdp, UdpToSerial
 from rc_lib import RcPacketReceiver
-from video_lib import PiCamVideoToUdp
+from video_lib import PiCamVideoToUdp, UsbCameraVideoToUdp
 from crsf_lib import CrsfRcOutput
 from sbus_lib import SbusRcOutput
 
@@ -207,15 +207,27 @@ def run_airlink():
             udp_port=mavlinkTxerConfig.udp_port,
         )
 
-        videoTxer = PiCamVideoToUdp(
-            name="VIDEO",
-            udp_port=videoTxerConfig.udp_port,
-            width=320,
-            height=240,
-            framerate=2,
-            bitrate=700000,
-            mtu=1200,
-        )
+        if(False):
+            videoTxer = PiCamVideoToUdp(
+                name="VIDEO",
+                udp_port=videoTxerConfig.udp_port,
+                width=320,
+                height=240,
+                framerate=2,
+                bitrate=700000,
+                mtu=1200,
+            )
+        else:
+            videoTxer = UsbCameraVideoToUdp(
+                name="VIDEO",
+                udp_port=videoTxerConfig.udp_port,
+                width=320,
+                height=240,
+                framerate=30,
+                bitrate=2_000_000,
+                input_format="mjpeg",   # "mjpeg", "h264", or "yuyv422"
+            )
+        # if
 
         while not stop_event.is_set():
             time.sleep(0.2)
