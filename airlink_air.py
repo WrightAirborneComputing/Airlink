@@ -221,9 +221,9 @@ def run_airlink():
             videoTxer = UsbCameraVideoToUdp(
                 name="VIDEO",
                 udp_port=videoTxerConfig.udp_port,
-                width=320,
-                height=240,
-                framerate=30,
+                width=640,
+                height=480,
+                framerate=20,
                 bitrate=2_000_000,
                 input_format="mjpeg",   # "mjpeg", "h264", or "yuyv422"
             )

@@ -73,7 +73,7 @@ class UsbCameraVideoToUdp:
         udp_port=9004,
         width=640,
         height=480,
-        framerate=30,
+        framerate=20,
         bitrate=2_000_000,
         input_format="h264",   # "mjpeg", "h264", or "yuyv422"
         mtu=1200,
