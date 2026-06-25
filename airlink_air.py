@@ -91,8 +91,8 @@ def run_airlink():
         )
 
         WIFI_IFACE = "wlan1"
-        WIFI_CHANNEL = 17
-        WIFI_TXPOWER_DBM = 30
+        WIFI_CHANNEL = 32
+        WIFI_TXPOWER_DBM = 23
         WIFI_KEY = "/etc/wfb/drone.key"
 
         rcRxerConfig = WfbConfig(
@@ -208,6 +208,8 @@ def run_airlink():
         )
 
         if(False):
+            pass
+        elif(False):
             videoTxer = PiCamVideoToUdp(
                 name="VIDEO",
                 udp_port=videoTxerConfig.udp_port,
