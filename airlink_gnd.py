@@ -20,6 +20,7 @@ from rc_lib import RcPacketSender, RcAckReceiver
 from led_lib import OnLed, ActivityLed, RssiLedBar
 from io_reader_lib import PicoJsonRcReader
 from video_lib import UdpRtpH264VideoDisplay
+from mavlink_lib import MavlinkMonitor
 
 runner = ProcessRunner()
 stop_event = threading.Event()
@@ -34,13 +35,19 @@ picoRcReader = None
 mavlinkGateway = None
 videoRxer = None
 
+mavlinkMonitor = None
+
 mavlinkLed = None
 rcLed = None
 rssiBar = None
 
+rcWfbTxProc = None
+rcTxerConfig = None
+
+
 def cleanup():
     global rcTxer, rcRxer, picoRcReader, mavlinkGateway, videoRxer
-    global appOnLed, mavlinkLed, rcLed
+    global mavlinkLed, rcLed
 
     stop_event.set()
     print("stopping")
@@ -60,9 +67,6 @@ def cleanup():
     if videoRxer is not None:
         videoRxer.stop()
 
-    if appOnLed is not None:
-        appOnLed.stop()
-
     if mavlinkLed is not None:
         mavlinkLed.stop()
 
@@ -72,10 +76,35 @@ def cleanup():
     runner.stop_all()
 
 
+def restart_rc_wfb_tx():
+    global rcWfbTxProc, rcTxerConfig
+
+    if stop_event.is_set():
+        return
+
+    if rcTxerConfig is None:
+        print("\r[WATCHDOG] RC TX config not ready", flush=True)
+        return
+
+    print("\r[WATCHDOG] restarting RC WFB TX", flush=True)
+
+    if rcWfbTxProc is not None and rcWfbTxProc.poll() is None:
+        rcWfbTxProc.terminate()
+
+        try:
+            rcWfbTxProc.wait(timeout=1.0)
+        except Exception:
+            rcWfbTxProc.kill()
+
+    rcWfbTxProc = WfbTx(rcTxerConfig, runner).start()
+
+
 def run_airlink():
     global rcStats, mavStats, videoStats
+    global mavlinkMonitor
     global rcTxer, rcRxer, picoRcReader, mavlinkGateway, videoRxer
-    global appOnLed, mavlinkLed, rcLed, rssiBar
+    global mavlinkLed, rcLed, rssiBar
+    global rcWfbTxProc, rcTxerConfig
 
     try:
         print_banner(
@@ -155,9 +184,11 @@ def run_airlink():
         rcLed = ActivityLed(20)
         rssiBar = RssiLedBar()
 
+        mavlinkMonitor = MavlinkMonitor()
+
         WifiRadioSetup(rcTxerConfig).run()
 
-        WfbTx(rcTxerConfig, runner).start()
+        rcWfbTxProc = WfbTx(rcTxerConfig, runner).start()
 
         WfbRx(rcRxerConfig, runner).start(
             suppress_output=False,
@@ -206,6 +237,7 @@ def run_airlink():
             qgc_out_port=14550,
             uplink_out_port=mavlinkTxerConfig.udp_port,
             led=mavlinkLed,
+            mavlink_monitor=mavlinkMonitor
         )
 
         if False:
@@ -237,7 +269,10 @@ if __name__ == "__main__":
     gui = AirlinkGui(
         title="Airlink Ground",
         rssi_getter=lambda: rcStats.get_rssi() if rcStats is not None else None,
+        voltage_getter=lambda: mavlinkMonitor.get_voltage() if mavlinkMonitor is not None else None,
+        altitude_getter=lambda: mavlinkMonitor.get_relative_altitude() if mavlinkMonitor is not None else None,
         worker_callback=run_airlink,
         cleanup_callback=cleanup,
     )
     gui.run()
+# if

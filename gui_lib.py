@@ -1,116 +1,227 @@
 #!/usr/bin/env python3
 
-import sys
-import queue
 import threading
 import tkinter as tk
 from tkinter.scrolledtext import ScrolledText
 
+import sys
 
-class QueueWriter:
-    def __init__(self, q):
-        self.q = q
+class GuiStdout:
+    def __init__(self, text_widget):
+        self.text_widget = text_widget
 
     def write(self, text):
-        if text:
-            self.q.put(text)
+        self.text_widget.after(0, self._append, text)
 
     def flush(self):
         pass
+
+    def _append(self, text):
+        self.text_widget.insert(tk.END, text)
+        self.text_widget.see(tk.END)
 
 
 class AirlinkGui:
     def __init__(
         self,
         title,
+        worker_callback,
+        cleanup_callback,
         rssi_getter=None,
-        worker_callback=None,
-        cleanup_callback=None,
+        voltage_getter=None,
+        altitude_getter=None,
     ):
-        self.title = title
-        self.rssi_getter = rssi_getter
         self.worker_callback = worker_callback
         self.cleanup_callback = cleanup_callback
 
-        self.log_queue = queue.Queue()
-
-    def log(self, text):
-        self.log_queue.put(str(text))
-
-    def run(self):
-        sys.stdout = QueueWriter(self.log_queue)
-        sys.stderr = QueueWriter(self.log_queue)
+        self.rssi_getter = rssi_getter
+        self.voltage_getter = voltage_getter
+        self.altitude_getter = altitude_getter
 
         self.root = tk.Tk()
-        self.root.title(self.title)
+        self.root.title(title)
+        self.root.geometry("1100x700")
 
-        rssi_frame = tk.Frame(self.root)
-        rssi_frame.pack(fill="x", padx=10, pady=10)
+        ###########################################################
+        # Telemetry panel
+        ###########################################################
+
+        telemetry = tk.Frame(self.root)
+        telemetry.pack(fill=tk.X, padx=10, pady=10)
+
+        title_font = ("Helvetica", 18, "bold")
+        value_font = ("Courier New", 34, "bold")
+
+        #
+        # RSSI
+        #
+
+        rssi_frame = tk.Frame(telemetry)
+        rssi_frame.pack(side=tk.LEFT, padx=25)
 
         tk.Label(
             rssi_frame,
-            text="RC RSSI",
-            font=("Arial", 24),
+            text="RSSI",
+            font=title_font,
         ).pack()
 
-        self.rssi_var = tk.StringVar(value="---")
+        self.rssi_label = tk.Label(
+            rssi_frame,
+            text="---",
+            width=8,
+            font=value_font,
+            fg="green",
+        )
+
+        self.rssi_label.pack()
+
+        #
+        # Battery
+        #
+
+        batt_frame = tk.Frame(telemetry)
+        batt_frame.pack(side=tk.LEFT, padx=25)
 
         tk.Label(
-            rssi_frame,
-            textvariable=self.rssi_var,
-            font=("Arial", 72, "bold"),
+            batt_frame,
+            text="Battery",
+            font=title_font,
         ).pack()
+
+        self.voltage_label = tk.Label(
+            batt_frame,
+            text="---",
+            width=8,
+            font=value_font,
+            fg="blue",
+        )
+
+        self.voltage_label.pack()
+
+        #
+        # Altitude
+        #
+
+        alt_frame = tk.Frame(telemetry)
+        alt_frame.pack(side=tk.LEFT, padx=25)
+
+        tk.Label(
+            alt_frame,
+            text="Altitude",
+            font=title_font,
+        ).pack()
+
+        self.altitude_label = tk.Label(
+            alt_frame,
+            text="---",
+            width=8,
+            font=value_font,
+            fg="purple",
+        )
+
+        self.altitude_label.pack()
+
+        ###########################################################
+        # Console
+        ###########################################################
 
         self.console = ScrolledText(
             self.root,
-            height=28,
-            width=120,
-            font=("Courier", 12),
+            font=("Courier New", 14),
         )
-        self.console.pack(fill="both", expand=True, padx=10, pady=10)
 
-        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+        self.console.pack(
+            fill=tk.BOTH,
+            expand=True,
+            padx=10,
+            pady=10,
+        )
 
-        if self.worker_callback is not None:
-            threading.Thread(
-                target=self.worker_callback,
-                daemon=True,
-            ).start()
+        sys.stdout = GuiStdout(self.console)
+        sys.stderr = GuiStdout(self.console)
 
-        self._pump_console()
-        self._update_rssi()
+        self.root.protocol(
+            "WM_DELETE_WINDOW",
+            self._close,
+        )
+
+    ###############################################################
+
+    def run(self):
+
+        threading.Thread(
+            target=self.worker_callback,
+            daemon=True,
+        ).start()
+
+        self._update_display()
 
         self.root.mainloop()
 
-    def _pump_console(self):
-        try:
-            while True:
-                text = self.log_queue.get_nowait()
-                self.console.insert("end", text)
-                self.console.see("end")
-        except queue.Empty:
-            pass
+    ###############################################################
 
-        self.root.after(100, self._pump_console)
+    def _update_display(self):
 
-    def _update_rssi(self):
-        value = None
+        #
+        # RSSI
+        #
 
         if self.rssi_getter is not None:
             try:
-                value = self.rssi_getter()
+                rssi = self.rssi_getter()
+
+                if rssi is None:
+                    self.rssi_label.config(text="---")
+                else:
+                    self.rssi_label.config(
+                        text=f"{rssi} dBm"
+                    )
             except Exception:
-                value = None
+                self.rssi_label.config(text="ERR")
 
-        if value is None:
-            self.rssi_var.set("---")
-        else:
-            self.rssi_var.set(f"{value} dB")
+        #
+        # Battery
+        #
 
-        self.root.after(250, self._update_rssi)
+        if self.voltage_getter is not None:
+            try:
+                v = self.voltage_getter()
 
-    def _on_close(self):
-        if self.cleanup_callback is not None:
+                if v is None:
+                    self.voltage_label.config(text="---")
+                else:
+                    self.voltage_label.config(
+                        text=f"{v:.1f} V"
+                    )
+            except Exception:
+                self.voltage_label.config(text="ERR")
+
+        #
+        # Altitude
+        #
+
+        if self.altitude_getter is not None:
+            try:
+                alt = self.altitude_getter()
+
+                if alt is None:
+                    self.altitude_label.config(text="---")
+                else:
+                    self.altitude_label.config(
+                        text=f"{alt:.1f} m"
+                    )
+            except Exception:
+                self.altitude_label.config(text="ERR")
+
+        self.root.after(
+            200,
+            self._update_display,
+        )
+
+    ###############################################################
+
+    def _close(self):
+        try:
             self.cleanup_callback()
-
-        self.root.after(500, self.root.destroy)
+        finally:
+            self.root.destroy()

@@ -5,216 +5,6 @@ import subprocess
 import time
 from pymavlink import mavutil
 
-class UdpTestSender:
-    def __init__(
-        self,
-        name: str,
-        port: int,
-        interval_sec: float = 0.1,
-        auto_start: bool = True,
-    ):
-        self.name = name
-        self.port = port
-        self.interval_sec = interval_sec
-
-        self.sock = socket.socket(
-            socket.AF_INET,
-            socket.SOCK_DGRAM
-        )
-
-        self.running = False
-        self.thread = None
-
-        if auto_start:
-            self.start()
-
-    def start(self):
-        if self.thread is not None:
-            return
-
-        self.running = True
-
-        self.thread = threading.Thread(
-            target=self._run,
-            daemon=True,
-        )
-
-        self.thread.start()
-
-    def stop(self):
-        self.running = False
-
-    def join(self, timeout=None):
-        if self.thread is not None:
-            self.thread.join(timeout)
-
-    def _run(self):
-        i = 0
-
-        print(
-            f"\r"
-            f"[{self.name}] "
-            f"Sending to UDP {self.port}"
-        )
-
-        while self.running:
-            msg = (
-                f"{time.time():.6f} "
-                f"{self.name} "
-                f"PACKET "
-                f"{i:06d}\r\n"
-            )
-
-            self.sock.sendto(
-                msg.encode("ascii"),
-                ("127.0.0.1", self.port)
-            )
-
-            i += 1
-
-            time.sleep(self.interval_sec)
-# class
-
-
-class UdpTestReceiver:
-    def __init__(
-        self,
-        name: str,
-        port: int,
-        timeout_sec: float = 0.2,
-        auto_start: bool = True,
-    ):
-        self.name = name
-        self.port = port
-        self.timeout_sec = timeout_sec
-
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-
-        self.sock.setsockopt(
-            socket.SOL_SOCKET,
-            socket.SO_RCVBUF,
-            65536
-        )
-
-        self.sock.bind(("127.0.0.1", port))
-        self.sock.settimeout(timeout_sec)
-
-        self.running = False
-        self.thread = None
-
-        self.rx_count = 0
-        self.overrun_count = 0
-
-        if auto_start:
-            self.start()
-
-    def start(self):
-        if self.thread is not None:
-            return
-
-        self.running = True
-
-        self.thread = threading.Thread(
-            target=self._run,
-            daemon=True,
-        )
-
-        self.thread.start()
-
-    def stop(self):
-        self.running = False
-
-    def join(self, timeout=None):
-        if self.thread is not None:
-            self.thread.join(timeout)
-
-    def _run(self):
-        print(f"\r[{self.name}] Listening on UDP 127.0.0.1:{self.port}")
-
-        last_packet_time = time.time()
-        warning_active = False
-
-        while self.running:
-            try:
-                data, _ = self.sock.recvfrom(4096)
-                self.rx_count += 1
-
-                now = time.time()
-
-                interval_ms = (
-                    now - last_packet_time
-                ) * 1000.0
-
-                last_packet_time = now
-
-                text = data.decode(
-                    "ascii",
-                    errors="replace"
-                ).strip()
-
-                latency_ms = None
-
-                try:
-                    tx_time = float(text.split()[0])
-
-                    latency_ms = (
-                        now - tx_time
-                    ) * 1000.0
-
-                except Exception:
-                    pass
-
-                if warning_active:
-                    print(
-                        f"\r"
-                        f"[{self.name}] "
-                        f"Packets resumed after "
-                        f"{interval_ms:.1f} ms",
-                        flush=True
-                    )
-
-                    warning_active = False
-
-                if(False):
-                    if latency_ms is None:
-                        print(
-                            f"\r"
-                            f"[{self.name}] "
-                            f"Interval: {interval_ms:.1f} ms  "
-                            f"Len: {len(text)}",
-                            flush=True
-                        )
-
-                    else:
-                        print(
-                            f"\r"
-                            f"[{self.name}] "
-                            f"Interval: {interval_ms:.1f} ms  "
-                            f"Latency: {latency_ms:.1f} ms  "
-                            f"Len: {len(text)}",
-                            flush=True
-                        )
-
-            except socket.timeout:
-                now = time.time()
-
-                delay_ms = (now - last_packet_time) * 1000.0
-
-                if ( (delay_ms >= self.timeout_sec * 1000.0) and (not warning_active) ):
-                    self.overrun_count += 1
-                    print(
-                        f"\r"
-                        f"[{self.name}] WARNING: "
-                        f"No packet received for "
-                        f"{delay_ms:.1f} ms",
-                        f"{self.overrun_count:d}/{self.rx_count:d} overruns",
-                        flush=True
-                    )
-
-                    warning_active = True
-# class
-
-
 class QgcMavlinkGateway:
     def __init__(
         self,
@@ -225,12 +15,14 @@ class QgcMavlinkGateway:
         uplink_out_port: int,
         led = None,
         auto_start: bool = True,
+        mavlink_monitor = None
     ):
         self.name = name
         self.client_addr = None
         self.running = False
         self.thread = None
         self.led = led
+        self.mavlink_monitor = mavlink_monitor
 
         self.down_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.down_sock.bind(("127.0.0.1", downlink_in_port))
@@ -339,6 +131,9 @@ class QgcMavlinkGateway:
                 if self.client_addr is not None:
                     # self._decode_mavlink_packet(data)
                     self.qgc_sock.sendto(data, self.client_addr)
+
+                if(self.mavlink_monitor is not None):
+                    self.mavlink_monitor.feed(data)
 
             except socket.timeout:
                 pass
