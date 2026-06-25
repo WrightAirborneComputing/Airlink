@@ -2,10 +2,26 @@ from gpiozero import LED
 import threading
 import time
 
+class OnLed:
+    def __init__(
+        self,
+        gpio_pin,
+    ):
+        self.led = LED(gpio_pin)
+        self.led.on()
+    # def
+
+    def stop(self):
+        self.led.off()
+    # def
+
+# class
+
 class ActivityLed:
     def __init__(
         self,
         gpio_pin,
+        on = False,
         timeout_sec=0.25,
     ):
         self.led = LED(gpio_pin)

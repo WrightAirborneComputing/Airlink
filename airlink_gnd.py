@@ -17,7 +17,7 @@ from wfb_lib import (
 
 from udp_lib import QgcMavlinkGateway, DynamicUdpForwarder
 from rc_lib import RcPacketSender, RcAckReceiver
-from led_lib import ActivityLed, RssiLedBar
+from led_lib import OnLed, ActivityLed, RssiLedBar
 from io_reader_lib import PicoJsonRcReader
 from video_lib import UdpRtpH264VideoDisplay
 
@@ -40,7 +40,7 @@ rssiBar = None
 
 def cleanup():
     global rcTxer, rcRxer, picoRcReader, mavlinkGateway, videoRxer
-    global mavlinkLed, rcLed
+    global appOnLed, mavlinkLed, rcLed
 
     stop_event.set()
     print("stopping")
@@ -60,6 +60,9 @@ def cleanup():
     if videoRxer is not None:
         videoRxer.stop()
 
+    if appOnLed is not None:
+        appOnLed.stop()
+
     if mavlinkLed is not None:
         mavlinkLed.stop()
 
@@ -72,7 +75,7 @@ def cleanup():
 def run_airlink():
     global rcStats, mavStats, videoStats
     global rcTxer, rcRxer, picoRcReader, mavlinkGateway, videoRxer
-    global mavlinkLed, rcLed, rssiBar
+    global appOnLed, mavlinkLed, rcLed, rssiBar
 
     try:
         print_banner(
@@ -94,8 +97,8 @@ def run_airlink():
         )
 
         WIFI_IFACE = "wlan1"
-        WIFI_CHANNEL = 17
-        WIFI_TXPOWER_DBM = 30
+        WIFI_CHANNEL = 32
+        WIFI_TXPOWER_DBM = 23
         WIFI_KEY = "/etc/wfb/gs.key"
 
         rcTxerConfig = WfbConfig(
@@ -147,6 +150,7 @@ def run_airlink():
         mavStats = WfbInstrumentationParser("MAVLINK-RX")
         videoStats = WfbInstrumentationParser("VIDEO-RX")
 
+        appOnLed = OnLed(16)
         mavlinkLed = ActivityLed(21)
         rcLed = ActivityLed(20)
         rssiBar = RssiLedBar()
