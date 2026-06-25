@@ -65,7 +65,7 @@ class AirlinkGui:
             self.root,
             height=28,
             width=120,
-            font=("Courier", 18),
+            font=("Courier", 12),
         )
         self.console.pack(fill="both", expand=True, padx=10, pady=10)
 
