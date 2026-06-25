@@ -124,9 +124,11 @@ class RcPacketSender:
             )
 
             # Check if TX is enabled by switch
-            self.set_enabled(tx_enabled)
+            # self.set_enabled(tx_enabled)
+            self.set_enabled(True)
             if self.enabled:
-                self.sock.sendto(payload.encode("ascii"),("127.0.0.1", self.port),)
+                status = self.sock.sendto(payload.encode("ascii"),("127.0.0.1", self.port),)
+                # print(f"\rSentStat[{status}]")
                 self.frame_count += 1
 
                 if now - last_print_time >= 1.0:
@@ -562,9 +564,7 @@ class RcAckReceiver:
             f"rx={self.rx_count} "
             f"lost={self.lost_count} "
             f"late>{self.latency_warn_sec * 1000:.0f}ms="
-            f"{self.late_count} "
-            f"avg_total={avg_total_ms:.1f} ms "
-            f"max_total={self.max_total_ms:.1f} ms ",
+            f"{self.late_count} ",
             flush=True,
         )
 
